@@ -2,6 +2,103 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #070C18;
+    color: #F0EDE8;
+  }
+
+  /* Custom scrollbar for dark theme */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0D1525;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1E2D4A;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #253558;
+  }
+}
+
+@layer components {
+  /* Markdown content styling for dark theme */
+  .prose-dark {
+    color: #A8A5A0;
+  }
+
+  .prose-dark h1,
+  .prose-dark h2,
+  .prose-dark h3,
+  .prose-dark h4,
+  .prose-dark h5,
+  .prose-dark h6 {
+    color: #F0EDE8;
+  }
+
+  .prose-dark a {
+    color: #4ECDD4;
+  }
+
+  .prose-dark a:hover {
+    color: #6EE8EE;
+  }
+
+  .prose-dark code {
+    background-color: #152035;
+    color: #D9A441;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+  }
+
+  .prose-dark pre {
+    background-color: #0D1525;
+    border: 1px solid #1E2D4A;
+    border-radius: 0.5rem;
+  }
+
+  .prose-dark pre code {
+    background-color: transparent;
+    color: #F0EDE8;
+    padding: 0;
+  }
+
+  .prose-dark blockquote {
+    border-left-color: #D9A441;
+    color: #A8A5A0;
+  }
+
+  .prose-dark table th {
+    color: #F0EDE8;
+    border-bottom-color: #1E2D4A;
+  }
+
+  .prose-dark table td {
+    border-bottom-color: #1E2D4A;
+  }
+
+  .prose-dark hr {
+    border-color: #1E2D4A;
+  }
+
+  .prose-dark strong {
+    color: #F0EDE8;
+  }
+
+  .prose-dark ul li::marker,
+  .prose-dark ol li::marker {
+    color: #6A6860;
+  }
 }

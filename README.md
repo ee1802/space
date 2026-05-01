@@ -34,7 +34,7 @@
   - Числовой ответ с допуском (автопроверка)
   - Формула с клавиатурой MathLive (автопроверка через SymPy)
 - Календарь олимпиад с фильтрацией по типам
-- Тренажёр звёздного неба (викторина по созвездиям)
+- Тренажёр звёздного неба (ссылка на внешний https://apex-skychart.ru)
 - Профиль с редактированием и сменой пароля
 
 ### Админ-панель
@@ -114,7 +114,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api pnpm dev
 space/
 ├── backend/
 │   ├── config/          # Django settings, urls, wsgi
-│   ├── core/            # User model, auth views, permissions
+│   ├── core/            # User model, auth views, permissions, throttles
 │   ├── courses/         # Courses, blocks, topics, lessons
 │   ├── homework/        # Homework, problems, submissions, formula checker
 │   ├── calendar_app/    # Olympiad events and types
@@ -125,12 +125,26 @@ space/
 │   ├── src/
 │   │   ├── app/         # Next.js App Router pages
 │   │   ├── components/  # Reusable components (MathField, MarkdownRenderer)
-│   │   └── lib/         # API client, auth context
+│   │   └── lib/         # API client, auth context, design-tokens
 │   ├── package.json
 │   └── Dockerfile
+├── design-archive/      # Original design prototypes and visual assets
+│   ├── apeks-components.jsx  # Design system components
+│   ├── apeks-lms-pages.jsx   # LMS page compositions
+│   ├── apeks-landing.jsx     # Landing page design
+│   ├── Apeks LMS.html        # Interactive prototype
+│   └── uploads/              # Reference images
+├── docs/
+│   ├── architecture.md  # System architecture
+│   ├── api.md           # API documentation
+│   └── admin-guide.md   # Admin user guide
+├── scripts/
+│   └── backup.sh        # Database backup script
 ├── nginx/
-│   └── nginx.conf
-├── docker-compose.yml
+│   ├── nginx.conf       # Development config
+│   └── nginx.prod.conf  # Production config with SSL
+├── docker-compose.yml       # Development setup
+├── docker-compose.prod.yml  # Production setup
 ├── .env.example
 └── README.md
 ```

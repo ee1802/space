@@ -28,6 +28,8 @@ const MONTHS_RU = [
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
 ];
 
+type ViewMode = 'month' | 'list';
+
 export default function CalendarPage() {
   const { token } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -35,6 +37,7 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedType, setSelectedType] = useState<number | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
 
   useEffect(() => {
     if (!token) return;
@@ -50,7 +53,7 @@ export default function CalendarPage() {
   const month = currentDate.getMonth();
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7; // Monday = 0
+  const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7;
 
   const filteredEvents = useMemo(() => {
     return events.filter(e => {
@@ -71,7 +74,6 @@ export default function CalendarPage() {
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
-  // Upcoming events list
   const today = new Date().toISOString().split('T')[0];
   const upcomingEvents = filteredEvents
     .filter(e => e.start_date >= today)
@@ -79,14 +81,30 @@ export default function CalendarPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Календарь олимпиад</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-[#F0EDE8]">Календарь олимпиад</h1>
+        <div className="flex bg-[#0D1525] border border-[#1E2D4A] rounded-lg overflow-hidden">
+          <button
+            onClick={() => setViewMode('month')}
+            className={`px-4 py-2 text-sm transition-colors ${viewMode === 'month' ? 'bg-[#4ECDD4] text-[#0A0E1A] font-medium' : 'text-[#A8A5A0] hover:bg-[#152035]'}`}
+          >
+            Месяц
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-4 py-2 text-sm transition-colors ${viewMode === 'list' ? 'bg-[#4ECDD4] text-[#0A0E1A] font-medium' : 'text-[#A8A5A0] hover:bg-[#152035]'}`}
+          >
+            Список
+          </button>
+        </div>
+      </div>
 
       {/* Type filter */}
       <div className="flex flex-wrap gap-2 mb-6">
         <button
           onClick={() => setSelectedType(null)}
-          className={`px-3 py-1 text-sm rounded-full border ${
-            selectedType === null ? 'bg-blue-600 text-white border-blue-600' : 'hover:bg-gray-50'
+          className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+            selectedType === null ? 'bg-[#4ECDD4] text-[#0A0E1A] border-[#4ECDD4] font-medium' : 'border-[#1E2D4A] text-[#A8A5A0] hover:bg-[#152035]'
           }`}
         >
           Все
@@ -95,115 +113,121 @@ export default function CalendarPage() {
           <button
             key={et.id}
             onClick={() => setSelectedType(selectedType === et.id ? null : et.id)}
-            className={`px-3 py-1 text-sm rounded-full border ${
-              selectedType === et.id ? 'text-white' : 'hover:bg-gray-50'
+            className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+              selectedType === et.id ? 'text-white font-medium' : 'border-[#1E2D4A] text-[#A8A5A0] hover:bg-[#152035]'
             }`}
             style={selectedType === et.id ? { backgroundColor: et.color, borderColor: et.color } : {}}
           >
-            <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: et.color }} />
+            <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: et.color }} />
             {et.name}
           </button>
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Calendar grid */}
-        <div className="lg:col-span-2">
+      {/* Month view */}
+      {viewMode === 'month' && (
+        <div>
           <div className="flex items-center justify-between mb-4">
-            <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded">&lt;</button>
-            <h2 className="text-lg font-semibold">{MONTHS_RU[month]} {year}</h2>
-            <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded">&gt;</button>
+            <button onClick={prevMonth} className="p-2 text-[#A8A5A0] hover:bg-[#152035] rounded-lg transition-colors">&lt;</button>
+            <h2 className="text-lg font-semibold text-[#F0EDE8]">{MONTHS_RU[month]} {year}</h2>
+            <button onClick={nextMonth} className="p-2 text-[#A8A5A0] hover:bg-[#152035] rounded-lg transition-colors">&gt;</button>
           </div>
 
-          <div className="grid grid-cols-7 gap-px bg-gray-200 border rounded-lg overflow-hidden">
+          <div className="grid grid-cols-7 gap-px bg-[#1E2D4A] border border-[#1E2D4A] rounded-xl overflow-hidden">
             {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => (
-              <div key={d} className="bg-gray-50 p-2 text-center text-xs font-medium text-gray-500">{d}</div>
+              <div key={d} className="bg-[#0D1525] p-2 text-center text-xs font-medium text-[#6A6860]">{d}</div>
             ))}
             {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-              <div key={`empty-${i}`} className="bg-white p-2 min-h-[80px]" />
+              <div key={`empty-${i}`} className="bg-[#070C18] p-2 min-h-[80px]" />
             ))}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
               const dayEvents = getEventsForDay(day);
-              const isToday = new Date().toISOString().split('T')[0] ===
+              const isToday = today ===
                 `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               return (
-                <div key={day} className={`bg-white p-2 min-h-[80px] ${isToday ? 'ring-2 ring-blue-500 ring-inset' : ''}`}>
-                  <div className={`text-xs mb-1 ${isToday ? 'font-bold text-blue-600' : 'text-gray-500'}`}>{day}</div>
+                <div key={day} className={`bg-[#070C18] p-2 min-h-[80px] ${isToday ? 'ring-2 ring-[#4ECDD4] ring-inset' : ''}`}>
+                  <div className={`text-xs mb-1 ${isToday ? 'font-bold text-[#4ECDD4]' : 'text-[#6A6860]'}`}>{day}</div>
                   {dayEvents.slice(0, 2).map(e => (
                     <button
                       key={e.id}
                       onClick={() => setSelectedEvent(e)}
-                      className="w-full text-left text-xs p-0.5 rounded truncate mb-0.5"
+                      className="w-full text-left text-xs p-0.5 rounded truncate mb-0.5 hover:opacity-80 transition-opacity"
                       style={{ backgroundColor: e.event_type_color + '20', color: e.event_type_color }}
                     >
                       {e.title}
                     </button>
                   ))}
                   {dayEvents.length > 2 && (
-                    <span className="text-xs text-gray-400">+{dayEvents.length - 2}</span>
+                    <span className="text-xs text-[#6A6860]">+{dayEvents.length - 2}</span>
                   )}
                 </div>
               );
             })}
           </div>
         </div>
+      )}
 
-        {/* Upcoming events list */}
+      {/* List view */}
+      {viewMode === 'list' && (
         <div>
-          <h3 className="font-semibold mb-4">Предстоящие события</h3>
+          <h3 className="font-semibold mb-4 text-[#F0EDE8]">Предстоящие события</h3>
           {upcomingEvents.length === 0 ? (
-            <p className="text-sm text-gray-500">Нет предстоящих событий.</p>
+            <p className="text-sm text-[#6A6860]">Нет предстоящих событий.</p>
           ) : (
             <div className="space-y-3">
               {upcomingEvents.map(e => (
                 <button
                   key={e.id}
                   onClick={() => setSelectedEvent(e)}
-                  className="w-full text-left border rounded-lg p-3 hover:bg-gray-50"
+                  className="w-full text-left bg-[#0D1525] border border-[#1E2D4A] rounded-xl p-4 hover:border-[#253558] transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: e.event_type_color }} />
-                    <span className="text-xs text-gray-500">{e.event_type_name}</span>
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: e.event_type_color }} />
+                    <span className="text-sm text-[#6A6860]">{e.event_type_name}</span>
                   </div>
-                  <div className="font-medium text-sm">{e.title}</div>
-                  <div className="text-xs text-gray-400 mt-1">
+                  <div className="font-medium text-[#F0EDE8]">{e.title}</div>
+                  <div className="text-sm text-[#A8A5A0] mt-1">
                     {new Date(e.start_date).toLocaleDateString('ru-RU')}
                     {e.end_date && e.end_date !== e.start_date && ` — ${new Date(e.end_date).toLocaleDateString('ru-RU')}`}
+                    {e.time && ` в ${e.time}`}
                   </div>
+                  {e.description && (
+                    <p className="text-sm text-[#A8A5A0] mt-2 line-clamp-2">{e.description}</p>
+                  )}
                 </button>
               ))}
             </div>
           )}
         </div>
-      </div>
+      )}
 
       {/* Event detail modal */}
       {selectedEvent && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={() => setSelectedEvent(null)}>
-          <div className="bg-white rounded-lg max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setSelectedEvent(null)}>
+          <div className="bg-[#0D1525] border border-[#1E2D4A] rounded-xl max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-2">
               <span className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedEvent.event_type_color }} />
-              <span className="text-sm text-gray-500">{selectedEvent.event_type_name}</span>
+              <span className="text-sm text-[#6A6860]">{selectedEvent.event_type_name}</span>
             </div>
-            <h2 className="text-xl font-bold mb-2">{selectedEvent.title}</h2>
-            <p className="text-sm text-gray-500 mb-4">
+            <h2 className="text-xl font-bold mb-2 text-[#F0EDE8]">{selectedEvent.title}</h2>
+            <p className="text-sm text-[#A8A5A0] mb-4">
               {new Date(selectedEvent.start_date).toLocaleDateString('ru-RU')}
               {selectedEvent.end_date && selectedEvent.end_date !== selectedEvent.start_date &&
                 ` — ${new Date(selectedEvent.end_date).toLocaleDateString('ru-RU')}`}
               {selectedEvent.time && ` в ${selectedEvent.time}`}
             </p>
             {selectedEvent.description && (
-              <p className="text-sm text-gray-700 mb-4">{selectedEvent.description}</p>
+              <p className="text-sm text-[#A8A5A0] mb-4">{selectedEvent.description}</p>
             )}
             {selectedEvent.external_url && (
               <a href={selectedEvent.external_url} target="_blank" rel="noopener noreferrer"
-                className="inline-block px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 mb-4">
+                className="inline-block px-4 py-2 bg-[#D9A441] text-[#0A0E1A] text-sm font-medium rounded-lg hover:bg-[#F4B860] transition-colors mb-4">
                 Перейти на сайт
               </a>
             )}
             <div className="text-right">
-              <button onClick={() => setSelectedEvent(null)} className="text-sm text-gray-500 hover:text-gray-700">
+              <button onClick={() => setSelectedEvent(null)} className="text-sm text-[#6A6860] hover:text-[#A8A5A0] transition-colors">
                 Закрыть
               </button>
             </div>

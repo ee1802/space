@@ -29,24 +29,33 @@ function VerifyEmailContent() {
   }, [token]);
 
   return (
-    <div className="bg-white p-8 rounded-lg border text-center">
-      {status === 'loading' && <p>Подтверждение...</p>}
-      {status === 'success' && <p className="text-green-600 mb-4">{message}</p>}
-      {status === 'error' && <p className="text-red-600 mb-4">{message}</p>}
-      <Link href="/app" className="text-blue-600 hover:underline">Перейти в кабинет</Link>
+    <div className="bg-[#0D1525] border border-[#1E2D4A] p-8 rounded-xl text-center">
+      {status === 'loading' && <p className="text-[#A8A5A0]">Подтверждение...</p>}
+      {status === 'success' && <p className="text-[#5BD68A] mb-4">{message}</p>}
+      {status === 'error' && <p className="text-[#FF7B6D] mb-4">{message}</p>}
+      <Link href="/app" className="text-[#4ECDD4] hover:text-[#6EE8EE] transition-colors">Перейти в кабинет</Link>
     </div>
   );
 }
 
 export default function VerifyEmailPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#070C18] px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="text-2xl font-bold">Апекс</Link>
-          <h1 className="text-xl mt-4">Подтверждение email</h1>
+          <Link href="/" className="inline-flex items-center gap-2 justify-center">
+            <svg width="28" height="28" viewBox="0 0 100 100" fill="none">
+              <circle cx="36" cy="22" r="3.5" fill="#D9A441" opacity="0.95"/>
+              <circle cx="72" cy="18" r="2.5" fill="#D9A441" opacity="0.95"/>
+              <circle cx="52" cy="52" r="2.2" fill="#D9A441" opacity="0.95"/>
+              <circle cx="38" cy="82" r="2" fill="#D9A441" opacity="0.95"/>
+              <circle cx="74" cy="80" r="3.2" fill="#D9A441" opacity="0.95"/>
+            </svg>
+            <span className="font-serif text-2xl font-semibold text-[#F0EDE8] tracking-tight">apeks</span>
+          </Link>
+          <h1 className="text-xl mt-4 text-[#F0EDE8]">Подтверждение email</h1>
         </div>
-        <Suspense fallback={<div>Загрузка...</div>}>
+        <Suspense fallback={<div className="text-[#6A6860] text-center">Загрузка...</div>}>
           <VerifyEmailContent />
         </Suspense>
       </div>

@@ -2,7 +2,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 from rest_framework import status, generics, permissions
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import timedelta
@@ -14,10 +14,12 @@ from .serializers import (
     ForgotPasswordSerializer, ResetPasswordSerializer, AdminUserSerializer,
 )
 from .permissions import IsAdmin
+from .throttles import LoginRateThrottle, RegisterRateThrottle, ForgotPasswordRateThrottle
 
 
 class RegisterView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [RegisterRateThrottle]
     serializer_class = RegisterSerializer
 
     def create(self, request, *args, **kwargs):
@@ -53,6 +55,7 @@ class RegisterView(generics.CreateAPIView):
 
 class LoginView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [LoginRateThrottle]
     serializer_class = LoginSerializer
 
     def post(self, request, *args, **kwargs):
@@ -102,6 +105,7 @@ def verify_email_view(request):
 
 class ForgotPasswordView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ForgotPasswordRateThrottle]
     serializer_class = ForgotPasswordSerializer
 
     def post(self, request, *args, **kwargs):

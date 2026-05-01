@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apeks — Прототип</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400;1,6..72,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="apeks-components.jsx"></script>
+<script type="text/babel" src="apeks-lms-pages.jsx"></script>
+<script type="text/babel" src="apeks-landing.jsx"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { height: 100%; }
+  body { font-family: 'Inter', sans-serif; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2F3D58; border-radius: 3px; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "lmsDark": true,
+  "sidebarCollapsed": false,
+  "startPage": "landing"
+}/*EDITMODE-END*/;
+
+function App() {
+  const [tweaks, setTweaks] = React.useState(TWEAK_DEFAULTS);
+  const [page, setPage] = React.useState(TWEAK_DEFAULTS.startPage);
+  const [showTweaks, setShowTweaks] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(TWEAK_DEFAULTS.sidebarCollapsed);
+
+  const lmsPages = ['dashboard','course','lesson','homework','calendar','trainer'];
+  const isLMS = lmsPages.includes(page);
+  const isLanding = page === 'landing';
+  const dark = isLanding ? false : tweaks.lmsDark;
+  const t = dark ? DARK_T : LIGHT_T;
+
+  const navigate = (p) => setPage(p);
+
+  // Tweaks protocol
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (e.data?.type === '__activate_edit_mode') setShowTweaks(true);
+      if (e.data?.type === '__deactivate_edit_mode') setShowTweaks(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const updateTweak = (key, val) => {
+    const next = { ...tweaks, [key]: val };
+    setTweaks(next);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
+    if (key === 'lmsDark') { /* rerender handled by state */ }
+    if (key === 'sidebarCollapsed') setCollapsed(val);
+    if (key === 'startPage') setPage(val);
+  };
+
+  return (
+    <ThemeCtx.Provider value={{ dark, t }}>
+      <RouteCtx.Provider value={{ page, navigate }}>
+        <div style={{ minHeight: '100vh', background: t.bg }}>
+
+          {/* LMS Pages */}
+          {isLMS && (
+            <LMSLayout collapsed={collapsed} page={page} navigate={navigate}>
+              {page === 'dashboard' && <DashboardPage navigate={navigate}/>}
+              {page === 'course'    && <CoursePage navigate={navigate}/>}
+              {page === 'lesson'    && <LessonPage navigate={navigate}/>}
+              {page === 'homework'  && <HomeworkPage navigate={navigate}/>}
+              {page === 'calendar'  && <CalendarPage navigate={navigate}/>}
+              {page === 'trainer'   && <TrainerPage navigate={navigate}/>}
+            </LMSLayout>
+          )}
+
+          {/* Landing */}
+          {isLanding && <LandingPage navigate={navigate}/>}
+
+          {/* Login */}
+          {page === 'login' && <LoginPage navigate={navigate}/>}
+
+          {/* Page-switcher pill (always visible, subtle) */}
+          {!showTweaks && (
+            <div style={{
+              position:'fixed', bottom:20, right:20, zIndex:999,
+              display:'flex', gap:6, background: dark ? '#1A2438' : '#F5F2ED',
+              border: `1px solid ${dark ? '#243047' : '#D5CFC2'}`,
+              borderRadius:9999, padding:'6px 10px', boxShadow:'0 4px 16px rgba(0,0,0,0.3)',
+            }}>
+              {[
+                {id:'landing',label:'Лендинг'},
+                {id:'login',label:'Вход'},
+                {id:'dashboard',label:'Кабинет'},
+                {id:'course',label:'Курс'},
+                {id:'lesson',label:'Занятие'},
+                {id:'homework',label:'ДЗ'},
+              ].map(pg => (
+                <button key={pg.id} onClick={()=>navigate(pg.id)}
+                  style={{
+                    padding:'4px 12px', borderRadius:9999, border:'none', cursor:'pointer',
+                    fontSize:12, fontWeight:500, fontFamily:'Inter,sans-serif',
+                    background: page===pg.id ? (dark?'#D9A441':'#D9A441') : 'transparent',
+                    color: page===pg.id ? '#16140F' : (dark?'#A9A599':'#5C5A52'),
+                    transition:'all 150ms ease',
+                  }}>
+                  {pg.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Tweaks Panel */}
+          {showTweaks && (
+            <TweaksPanel
+              tweaks={tweaks} updateTweak={updateTweak}
+              collapsed={collapsed} setCollapsed={v=>{setCollapsed(v);updateTweak('sidebarCollapsed',v);}}
+              page={page} navigate={navigate}
+              onClose={()=>{ setShowTweaks(false); window.parent.postMessage({type:'__edit_mode_dismissed'},'*'); }}/>
+          )}
+        </div>
+      </RouteCtx.Provider>
+    </ThemeCtx.Provider>
+  );
+}
+
+function TrainerPage({ navigate }) {
+  const { t } = useT();
+  return (
+    <div style={{padding:'60px 56px',maxWidth:700,textAlign:'center',margin:'0 auto'}}>
+      <div style={{margin:'0 auto 32px',width:180,height:180,position:'relative'}}>
+        {[150,110,70].map((s,i) => (
+          <div key={i} style={{position:'absolute',top:'50%',left:'50%',transform:`translate(-50%,-50%)`,width:s,height:s,borderRadius:'50%',border:`1px solid ${t.gold}`,opacity:0.15+i*0.1}}/>
+        ))}
+        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <ConstellationSVG width={100} height={100} color={t.gold} starOpacity={0.8} lineOpacity={0.35}/>
+        </div>
+        <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',width:16,height:16,borderRadius:'50%',background:t.gold,boxShadow:`0 0 12px ${t.gold}`}}/>
+      </div>
+      <h1 style={{fontFamily:'Newsreader,serif',fontSize:32,fontWeight:600,color:t.text,marginBottom:12}}>Тренажёр звёздного неба</h1>
+      <p style={{fontSize:15,color:t.sec,lineHeight:1.65,marginBottom:32,maxWidth:480,margin:'0 auto 32px'}}>
+        Apex Skychart — отдельный тренажёр для отработки навигации по небу. Работает в браузере, без установки.
+      </p>
+      <Btn size="lg" onClick={()=>window.open('https://apex-skychart.ru','_blank')}>
+        Открыть тренажёр ↗
+      </Btn>
+      <p style={{fontSize:12,color:t.muted,marginTop:12}}>Откроется в новой вкладке. Авторизация в тренажёре отдельная.</p>
+    </div>
+  );
+}
+
+// Tweaks Panel
+function TweaksPanel({ tweaks, updateTweak, collapsed, setCollapsed, page, navigate, onClose }) {
+  const { dark, t } = useT();
+  const pages = ['landing','login','dashboard','course','lesson','homework','calendar','trainer'];
+  const pageLabelMap = {landing:'Лендинг',login:'Вход',dashboard:'Кабинет',course:'Курс',lesson:'Занятие',homework:'ДЗ',calendar:'Календарь',trainer:'Тренажёр'};
+
+  return (
+    <div style={{
+      position:'fixed', bottom:24, right:24, zIndex:9999,
+      width:280, background:'#1A2438', borderRadius:16, padding:20,
+      border:'1px solid #243047', boxShadow:'0 24px 48px rgba(0,0,0,0.6)',
+      fontFamily:'Inter,sans-serif',
+    }}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+        <span style={{fontSize:14,fontWeight:600,color:'#F5F2ED'}}>Tweaks</span>
+        <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'#6E6B62',fontSize:18,lineHeight:1}}>×</button>
+      </div>
+
+      <TSection label="Экран">
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+          {pages.map(p => (
+            <button key={p} onClick={()=>navigate(p)}
+              style={{padding:'6px 10px',borderRadius:8,border:`1px solid ${page===p?'#D9A441':'#243047'}`,background:page===p?'rgba(217,164,65,0.12)':'transparent',color:page===p?'#D9A441':'#A9A599',fontSize:12,fontWeight:500,cursor:'pointer',transition:'all 150ms ease',fontFamily:'Inter,sans-serif'}}>
+              {pageLabelMap[p]}
+            </button>
+          ))}
+        </div>
+      </TSection>
+
+      <TSection label="Тема LMS">
+        <div style={{display:'flex',gap:8}}>
+          {[{val:true,label:'Тёмная'},{val:false,label:'Светлая'}].map(opt => (
+            <button key={String(opt.val)} onClick={()=>updateTweak('lmsDark',opt.val)}
+              style={{flex:1,padding:'8px 0',borderRadius:8,border:`1px solid ${tweaks.lmsDark===opt.val?'#D9A441':'#243047'}`,background:tweaks.lmsDark===opt.val?'rgba(217,164,65,0.12)':'transparent',color:tweaks.lmsDark===opt.val?'#D9A441':'#A9A599',fontSize:13,fontWeight:500,cursor:'pointer',transition:'all 150ms ease',fontFamily:'Inter,sans-serif'}}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </TSection>
+
+      <TSection label="Сайдбар" last>
+        <div style={{display:'flex',gap:8}}>
+          {[{val:false,label:'Раскрытый'},{val:true,label:'Свёрнутый'}].map(opt => (
+            <button key={String(opt.val)} onClick={()=>setCollapsed(opt.val)}
+              style={{flex:1,padding:'8px 0',borderRadius:8,border:`1px solid ${collapsed===opt.val?'#D9A441':'#243047'}`,background:collapsed===opt.val?'rgba(217,164,65,0.12)':'transparent',color:collapsed===opt.val?'#D9A441':'#A9A599',fontSize:13,fontWeight:500,cursor:'pointer',transition:'all 150ms ease',fontFamily:'Inter,sans-serif'}}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </TSection>
+    </div>
+  );
+}
+
+function TSection({ label, children, last }) {
+  return (
+    <div style={{marginBottom: last ? 0 : 20, paddingBottom: last ? 0 : 20, borderBottom: last ? 'none' : '1px solid #243047'}}>
+      <div style={{fontSize:11,fontWeight:600,color:'#6E6B62',letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:10}}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);
+</script>
+</body>
+</html>

@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ru">
+    <html lang="ru" className="dark">
       <head>
         <link
           rel="stylesheet"
@@ -21,7 +21,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body className="min-h-screen bg-white text-gray-900">
+      <body className="min-h-screen bg-[#070C18] text-[#F0EDE8]">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
