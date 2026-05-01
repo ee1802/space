@@ -34,7 +34,10 @@ async function fetchAPI(endpoint: string, options: FetchOptions = {}) {
 
 // Auth
 export const auth = {
-  register: (data: { email: string; password: string; password_confirm: string; full_name?: string; telegram_username?: string }) =>
+  sendCode: (email: string, type: string) =>
+    fetchAPI('/auth/send-code', { method: 'POST', body: JSON.stringify({ email, type }) }),
+
+  register: (data: { email: string; password: string; password_confirm: string; code: string; telegram_username?: string }) =>
     fetchAPI('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
 
   login: (data: { email: string; password: string }) =>

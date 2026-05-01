@@ -194,6 +194,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </a>
           )}
 
+          <a
+            href="https://t.me/obiqe"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[#4ECDD4] hover:bg-[rgba(78,205,212,0.12)] transition-all"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.04 9.608c-.152.68-.556.847-1.126.527l-3.109-2.291-1.5 1.443c-.166.166-.305.305-.626.305l.223-3.164 5.755-5.197c.25-.222-.054-.346-.388-.123L7.03 14.765l-3.032-.948c-.66-.206-.673-.66.137-.977l11.848-4.569c.55-.198 1.032.134.579 1.977z"/></svg>
+            Поддержка
+          </a>
+
           <button
             onClick={() => { logout(); router.push('/'); }}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[#FF7B6D] hover:bg-[rgba(255,123,109,0.12)] transition-all text-left"

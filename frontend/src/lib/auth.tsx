@@ -18,7 +18,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { email: string; password: string; password_confirm: string; full_name?: string; telegram_username?: string }) => Promise<void>;
+  register: (data: { email: string; password: string; password_confirm: string; code: string; telegram_username?: string }) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
