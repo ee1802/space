@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(data.user);
   };
 
-  const register = async (regData: { email: string; password: string; password_confirm: string; full_name?: string; telegram_username?: string }) => {
+  const register = async (regData: { email: string; password: string; password_confirm: string; code: string; telegram_username?: string }) => {
     const data = await authAPI.register(regData);
     saveTokens(data.tokens.access, data.tokens.refresh);
     setUser(data.user);
