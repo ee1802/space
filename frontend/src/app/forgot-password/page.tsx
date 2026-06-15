@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { auth } from '@/lib/api';
+import { Brand } from '@/components/brand';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -28,20 +29,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#070C18] px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 justify-center">
-            <svg width="28" height="28" viewBox="0 0 100 100" fill="none">
-              <circle cx="36" cy="22" r="3.5" fill="#D9A441" opacity="0.95"/>
-              <circle cx="72" cy="18" r="2.5" fill="#D9A441" opacity="0.95"/>
-              <circle cx="52" cy="52" r="2.2" fill="#D9A441" opacity="0.95"/>
-              <circle cx="38" cy="82" r="2" fill="#D9A441" opacity="0.95"/>
-              <circle cx="74" cy="80" r="3.2" fill="#D9A441" opacity="0.95"/>
-              <line x1="36" y1="22" x2="52" y2="52" stroke="#D9A441" strokeWidth="0.6" opacity="0.4"/>
-              <line x1="72" y1="18" x2="52" y2="52" stroke="#D9A441" strokeWidth="0.6" opacity="0.4"/>
-              <line x1="52" y1="52" x2="38" y2="82" stroke="#D9A441" strokeWidth="0.6" opacity="0.4"/>
-              <line x1="52" y1="52" x2="74" y2="80" stroke="#D9A441" strokeWidth="0.6" opacity="0.4"/>
-            </svg>
-            <span className="font-serif text-2xl font-semibold text-[#F0EDE8] tracking-tight">apeks</span>
-          </Link>
+          <Brand href="/" size="md" gradient glow className="justify-center" />
           <h1 className="text-xl mt-4 text-[#F0EDE8]">Восстановление пароля</h1>
         </div>
         {sent ? (

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { courses as coursesAPI, unwrap, Course } from '@/lib/api';
 import { ToastHost } from '@/components/ui';
+import { Brand } from '@/components/brand';
 
 interface CourseItem {
   id: number;
@@ -148,25 +149,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
       `}>
         {/* Logo */}
-        <div className="p-4 border-b border-[#1E2D4A] flex items-center gap-2.5">
-          <div className="w-7 h-7 flex-shrink-0">
-            <svg width="28" height="28" viewBox="0 0 100 100" fill="none">
-              <circle cx="36" cy="22" r="3.5" fill="#D9A441" opacity="0.95"/>
-              <circle cx="72" cy="18" r="2.5" fill="#D9A441" opacity="0.95"/>
-              <circle cx="40" cy="50" r="1.8" fill="#D9A441" opacity="0.95"/>
-              <circle cx="52" cy="52" r="2.2" fill="#D9A441" opacity="0.95"/>
-              <circle cx="64" cy="49" r="1.8" fill="#D9A441" opacity="0.95"/>
-              <circle cx="38" cy="82" r="2" fill="#D9A441" opacity="0.95"/>
-              <circle cx="74" cy="80" r="3.2" fill="#D9A441" opacity="0.95"/>
-              <line x1="36" y1="22" x2="40" y2="50" stroke="#D9A441" strokeWidth="0.6" opacity="0.4"/>
-              <line x1="72" y1="18" x2="64" y2="49" stroke="#D9A441" strokeWidth="0.6" opacity="0.4"/>
-              <line x1="40" y1="50" x2="52" y2="52" stroke="#D9A441" strokeWidth="0.6" opacity="0.4"/>
-              <line x1="52" y1="52" x2="64" y2="49" stroke="#D9A441" strokeWidth="0.6" opacity="0.4"/>
-              <line x1="40" y1="50" x2="38" y2="82" stroke="#D9A441" strokeWidth="0.6" opacity="0.4"/>
-              <line x1="64" y1="49" x2="74" y2="80" stroke="#D9A441" strokeWidth="0.6" opacity="0.4"/>
-            </svg>
-          </div>
-          <span className="font-serif text-xl font-semibold text-[#F0EDE8] tracking-tight">apeks</span>
+        <div className="p-4 border-b border-[#1E2D4A]">
+          <Brand href="/app" size="sm" glow />
         </div>
 
         {/* Global search */}

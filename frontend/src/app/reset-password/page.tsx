@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/lib/api';
+import { Brand } from '@/components/brand';
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -57,16 +58,7 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#070C18] px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 justify-center">
-            <svg width="28" height="28" viewBox="0 0 100 100" fill="none">
-              <circle cx="36" cy="22" r="3.5" fill="#D9A441" opacity="0.95"/>
-              <circle cx="72" cy="18" r="2.5" fill="#D9A441" opacity="0.95"/>
-              <circle cx="52" cy="52" r="2.2" fill="#D9A441" opacity="0.95"/>
-              <circle cx="38" cy="82" r="2" fill="#D9A441" opacity="0.95"/>
-              <circle cx="74" cy="80" r="3.2" fill="#D9A441" opacity="0.95"/>
-            </svg>
-            <span className="font-serif text-2xl font-semibold text-[#F0EDE8] tracking-tight">apeks</span>
-          </Link>
+          <Brand href="/" size="md" gradient glow className="justify-center" />
           <h1 className="text-xl mt-4 text-[#F0EDE8]">Новый пароль</h1>
         </div>
         <Suspense fallback={<div className="text-[#6A6860] text-center">Загрузка...</div>}>

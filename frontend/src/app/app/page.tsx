@@ -279,10 +279,21 @@ function CoursesSection() {
 }
 
 /* ------------------------------------------------------------------ *
- * Recommendations section
+ * AI recommendations — prominent highlight
  * ------------------------------------------------------------------ */
 
-function RecommendationsSection() {
+const PRIORITY_HEX: Record<ThemeColor, string> = {
+  gold: '#D9A441',
+  cyan: '#4ECDD4',
+  purple: '#8B6DD4',
+  success: '#5BD68A',
+  error: '#FF7B6D',
+  warning: '#FFB547',
+  info: '#7AB6F5',
+  muted: '#6A6860',
+};
+
+function AiHighlight() {
   const { token } = useAuth();
   const [data, setData] = useState<RecommendationResponse | null>(null);
   const [error, setError] = useState(false);
@@ -303,72 +314,101 @@ function RecommendationsSection() {
     };
   }, [token]);
 
-  const items: Recommendation[] = data?.items ?? [];
-  const isAI = (data?.generated_by || '').toLowerCase().includes('ai') ||
-    (data?.generated_by || '').toLowerCase().includes('gpt') ||
-    (data?.generated_by || '').toLowerCase().includes('ml') ||
-    (data?.generated_by || '').toLowerCase().includes('ии');
-  const caption = isAI ? 'сгенерировано ИИ' : 'подобрано для вас';
+  const items: Recommendation[] = (data?.items ?? []).slice(0, 6);
+  const gb = (data?.generated_by || '').toLowerCase();
+  const isAI = gb.includes('ai') || gb.includes('gpt') || gb.includes('ml') || gb.includes('ии');
+  const caption = data
+    ? isAI
+      ? 'Сгенерировано ИИ по вашему прогрессу'
+      : 'Подобрано по вашему прогрессу'
+    : 'Персональный план подготовки';
 
   return (
-    <Card>
-      <CardHeader
-        title="Рекомендации"
-        subtitle={data ? caption : undefined}
-        action={
-          <span className="text-[#8B6DD4]" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z" />
-            </svg>
-          </span>
-        }
+    <section
+      aria-labelledby="ai-rec-title"
+      className="relative overflow-hidden rounded-2xl border border-[#2A2150] bg-[#0D1525]"
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(55% 80% at 100% 0%, rgba(139,109,212,0.20), transparent 60%), radial-gradient(45% 70% at 0% 100%, rgba(78,205,212,0.12), transparent 60%)',
+        }}
       />
-
-      {data === null && !error ? (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="rounded-lg border border-[#1E2D4A] p-3 space-y-2">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-3 w-full" />
+      <div className="relative p-5 sm:p-6">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-[#8B6DD4]/35 bg-[#8B6DD4]/15 text-[#C9B6FF]">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z" />
+              </svg>
+            </span>
+            <div>
+              <h2 id="ai-rec-title" className="font-display text-lg sm:text-xl font-bold text-[#F0EDE8]">
+                Рекомендации <span className="apex-text-aurora">ИИ</span>
+              </h2>
+              <p className="mt-0.5 text-xs text-[#A8A5A0]">{caption}</p>
             </div>
-          ))}
+          </div>
+          {data && items.length > 0 && (
+            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[#8B6DD4]/30 bg-[#8B6DD4]/10 px-2.5 py-1 text-[11px] font-medium text-[#C9B6FF]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#5BD68A]" />
+              {isAI ? 'Персонально для вас' : 'Подбор по прогрессу'}
+            </span>
+          )}
         </div>
-      ) : error ? (
-        <p className="text-sm text-[#6A6860] py-4">
-          Не удалось загрузить рекомендации.
-        </p>
-      ) : items.length > 0 ? (
-        <ul className="space-y-2.5">
-          {items.map((rec, i) => {
-            const pr = priorityBadge(rec.priority);
-            return (
-              <li key={i}>
+
+        {data === null && !error ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="space-y-2 rounded-xl border border-[#1E2D4A] p-4">
+                <Skeleton className="h-3 w-1/3" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-full" />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <p className="py-4 text-sm text-[#6A6860]">Не удалось загрузить рекомендации.</p>
+        ) : items.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((rec, i) => {
+              const pr = priorityBadge(rec.priority);
+              const hex = PRIORITY_HEX[pr.color];
+              return (
                 <Link
+                  key={i}
                   href={rec.action_url || '#'}
-                  className="block rounded-lg border border-[#1E2D4A] p-3 hover:border-[#253558] hover:bg-[#152035] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B6DD4]"
+                  className="group flex flex-col rounded-xl border border-[#1E2D4A] bg-[#0B111F] p-4 transition-colors hover:border-[#8B6DD4]/50 hover:bg-[#152035] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B6DD4]"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-[#F0EDE8] text-sm leading-snug">
-                      {rec.title}
-                    </p>
-                    <Badge color={pr.color} className="flex-shrink-0">{pr.label}</Badge>
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full" style={{ background: hex }} />
+                    <span className="text-[11px] font-medium uppercase tracking-wide" style={{ color: hex }}>
+                      {pr.label}
+                    </span>
                   </div>
-                  {rec.reason && (
-                    <p className="mt-1 text-xs text-[#A8A5A0] line-clamp-2">{rec.reason}</p>
-                  )}
+                  <p className="mb-1.5 text-sm font-medium leading-snug text-[#F0EDE8]">{rec.title}</p>
+                  {rec.reason && <p className="line-clamp-3 flex-1 text-xs text-[#A8A5A0]">{rec.reason}</p>}
+                  <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[#4ECDD4] group-hover:text-[#6EE8EE]">
+                    Перейти
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </span>
                 </Link>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <EmptyState
-          title="Пока нет рекомендаций"
-          subtitle="Решайте задачи и смотрите уроки — мы подскажем, что изучить дальше."
-          className="!py-8"
-        />
-      )}
-    </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState
+            title="Пока нет рекомендаций"
+            subtitle="Решайте задачи и смотрите уроки — ИИ подскажет, что изучить дальше и где ваши слабые места."
+            className="!py-8"
+          />
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -633,17 +673,17 @@ export default function DashboardPage() {
         </p>
       </header>
 
+      {/* AI recommendations — prominent, top of dashboard */}
+      <AiHighlight />
+
       {/* Courses */}
       <CoursesSection />
 
-      {/* Recommendations + Upcoming */}
-      <section className="grid gap-6 lg:grid-cols-2 items-start">
-        <RecommendationsSection />
-        <UpcomingSection />
-      </section>
-
       {/* Quick stats */}
       <QuickStatsSection />
+
+      {/* Upcoming */}
+      <UpcomingSection />
     </div>
   );
 }

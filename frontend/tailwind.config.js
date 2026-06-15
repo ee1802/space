@@ -27,7 +27,26 @@ module.exports = {
         }
       },
       fontFamily: {
-        'serif': ['Georgia', 'Times New Roman', 'serif'],
+        'sans': ['var(--font-sans)', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        'display': ['var(--font-display)', 'Georgia', 'serif'],
+        // Legacy heading utility used across the app — remapped from Georgia to the
+        // brand sans (Manrope) so in-app headings stay cohesive with the rebrand.
+        // The Unbounded display face is reserved for `font-display` (wordmark, landing, AI block).
+        'serif': ['var(--font-sans)', 'Georgia', 'serif'],
+      },
+      keyframes: {
+        twinkle: {
+          '0%, 100%': { opacity: '0.15' },
+          '50%': { opacity: '0.9' },
+        },
+        floaty: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-8px)' },
+        },
+      },
+      animation: {
+        twinkle: 'twinkle 3.5s ease-in-out infinite',
+        floaty: 'floaty 6s ease-in-out infinite',
       },
     },
   },

@@ -3,14 +3,21 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-display: 'Unbounded', Georgia, 'Times New Roman', serif;
+  }
+
   html {
     color-scheme: dark;
   }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans);
     background-color: #070C18;
     color: #F0EDE8;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   /* Custom scrollbar for dark theme */
@@ -133,6 +140,73 @@
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Brand / cosmic theme helpers (landing + AI highlight)
+ * ------------------------------------------------------------------ */
+
+/* Gold gradient wordmark / headings (echoes the star). */
+.apex-text-gold {
+  background: linear-gradient(180deg, #FFE885 0%, #FFB01F 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Cyan→purple gradient for AI / accent headings. */
+.apex-text-aurora {
+  background: linear-gradient(100deg, #6EE8EE 0%, #8B6DD4 60%, #C77DFF 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Deep cosmic backdrop for hero / feature bands. Layered nebula glows
+   fading into the app background so sections blend seamlessly. */
+.apex-cosmic {
+  background-color: #070C18;
+  background-image:
+    radial-gradient(80% 75% at 12% -8%, rgba(74, 30, 120, 0.55) 0%, rgba(74, 30, 120, 0) 55%),
+    radial-gradient(72% 70% at 96% 6%, rgba(154, 30, 106, 0.42) 0%, rgba(154, 30, 106, 0) 55%),
+    radial-gradient(70% 80% at 50% 118%, rgba(22, 26, 102, 0.5) 0%, rgba(22, 26, 102, 0) 60%);
+}
+
+/* Frosted glass surface that sits over the cosmic backdrop. */
+.apex-glass {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.apex-glass-hover:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* Soft golden halo behind the star emblem. */
+.apex-glow-sm { filter: drop-shadow(0 0 6px rgba(255, 178, 44, 0.45)); }
+.apex-glow-lg { filter: drop-shadow(0 0 26px rgba(255, 178, 44, 0.5)) drop-shadow(0 0 70px rgba(154, 30, 106, 0.35)); }
+
+/* Visible keyboard focus ring that reads on the dark cosmic background. */
+.apex-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #070C18, 0 0 0 4px rgba(78, 205, 212, 0.95);
+  border-radius: 6px;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
