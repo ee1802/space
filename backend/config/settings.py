@@ -7,9 +7,17 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'dev-secret-key-change-in-production')
+_INSECURE_SECRET = 'dev-secret-key-change-in-production'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', _INSECURE_SECRET)
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
+
+# Never let a real deployment run on the public fallback key (forgeable JWTs).
+if not DEBUG and SECRET_KEY == _INSECURE_SECRET:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY must be set to a unique secret value when DJANGO_DEBUG is off.'
+    )
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -21,6 +29,7 @@ INSTALLED_APPS = [
     # Third party
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django_filters',
     # Local apps
@@ -28,6 +37,9 @@ INSTALLED_APPS = [
     'courses',
     'homework',
     'calendar_app',
+    'olympiads',
+    'analytics',
+    'engagement',
 ]
 
 MIDDLEWARE = [

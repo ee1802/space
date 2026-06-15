@@ -59,7 +59,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (refreshToken) {
         try {
           const data = await authAPI.refreshToken(refreshToken);
-          saveTokens(data.access, refreshToken);
+          // Refresh-token rotation is enabled server-side: persist the NEW
+          // refresh token when the response includes one, otherwise keep the
+          // existing one. Reusing a rotated-out token would fail next refresh.
+          saveTokens(data.access, data.refresh ?? refreshToken);
           const userData = await authAPI.me(data.access);
           setUser(userData);
         } catch {

@@ -1,3 +1,5 @@
+import random
+
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
@@ -12,9 +14,69 @@ from .serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer,
     UserProfileUpdateSerializer, ChangePasswordSerializer,
     ForgotPasswordSerializer, ResetPasswordSerializer, AdminUserSerializer,
+    SendCodeSerializer,
 )
 from .permissions import IsAdmin
-from .throttles import LoginRateThrottle, RegisterRateThrottle, ForgotPasswordRateThrottle
+from .throttles import (
+    LoginRateThrottle, RegisterRateThrottle,
+    ForgotPasswordRateThrottle, SendCodeRateThrottle,
+)
+
+
+def _issue_tokens(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+    }
+
+
+class SendCodeView(generics.GenericAPIView):
+    """
+    POST /api/auth/send-code  {email, type}
+    Generates a 6-digit verification code, stores it on a pending (inactive,
+    unverified) User as 'email_verification_token' = '<code>:<iso-timestamp>',
+    and emails it. In dev the console email backend prints it.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [SendCodeRateThrottle]
+    serializer_class = SendCodeSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+
+        code = f'{random.randint(0, 999999):06d}'
+        stored = f'{code}:{timezone.now().isoformat()}'
+
+        # Reuse the existing unverified user if present, otherwise create a
+        # pending one. Never touch an already-verified account.
+        user = User.objects.filter(email=email).first()
+        if user is None:
+            user = User.objects.create_user(email=email, password=None)
+            user.is_active = False
+        elif user.is_email_verified:
+            # validate_email already guards this, but stay safe.
+            return Response(
+                {'detail': 'Пользователь с таким email уже существует.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user.email_verification_token = stored
+        user.save(update_fields=['email_verification_token', 'is_active'])
+
+        try:
+            send_mail(
+                'Код подтверждения — Апекс',
+                f'Ваш код подтверждения: {code}\n\nКод действителен 15 минут.',
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+
+        return Response({'detail': 'Код подтверждения отправлен на email.'})
 
 
 class RegisterView(generics.CreateAPIView):
@@ -27,29 +89,9 @@ class RegisterView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # Generate verification token and send email
-        token = user.generate_verification_token()
-        verification_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
-
-        try:
-            send_mail(
-                'Подтверждение email — Апекс',
-                f'Для подтверждения email перейдите по ссылке: {verification_url}',
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                fail_silently=True,
-            )
-        except Exception:
-            pass
-
-        # Generate JWT tokens
-        refresh = RefreshToken.for_user(user)
         return Response({
             'user': UserSerializer(user).data,
-            'tokens': {
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
-            }
+            'tokens': _issue_tokens(user),
         }, status=status.HTTP_201_CREATED)
 
 
@@ -63,24 +105,20 @@ class LoginView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
 
-        refresh = RefreshToken.for_user(user)
         return Response({
             'user': UserSerializer(user).data,
-            'tokens': {
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
-            }
+            'tokens': _issue_tokens(user),
         })
 
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def logout_view(request):
+    """Blacklist the supplied refresh token. A bad/expired token still returns 200."""
     try:
         refresh_token = request.data.get('refresh')
         if refresh_token:
-            token = RefreshToken(refresh_token)
-            token.blacklist()
+            RefreshToken(refresh_token).blacklist()
     except Exception:
         pass
     return Response({'detail': 'Выход выполнен.'})
@@ -96,8 +134,9 @@ def verify_email_view(request):
     try:
         user = User.objects.get(email_verification_token=token)
         user.is_email_verified = True
+        user.is_active = True
         user.email_verification_token = ''
-        user.save(update_fields=['is_email_verified', 'email_verification_token'])
+        user.save(update_fields=['is_email_verified', 'is_active', 'email_verification_token'])
         return Response({'detail': 'Email подтверждён.'})
     except User.DoesNotExist:
         return Response({'detail': 'Недействительный токен.'}, status=400)
@@ -114,7 +153,7 @@ class ForgotPasswordView(generics.GenericAPIView):
         email = serializer.validated_data['email']
 
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email=email, is_email_verified=True)
             token = user.generate_password_reset_token()
             reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
 
@@ -126,13 +165,14 @@ class ForgotPasswordView(generics.GenericAPIView):
                 fail_silently=True,
             )
         except User.DoesNotExist:
-            pass  # Don't reveal if email exists
+            pass  # Don't reveal whether the email exists.
 
         return Response({'detail': 'Если email зарегистрирован, на него отправлена ссылка для сброса пароля.'})
 
 
 class ResetPasswordView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ForgotPasswordRateThrottle]
     serializer_class = ResetPasswordSerializer
 
     def post(self, request, *args, **kwargs):
@@ -144,18 +184,19 @@ class ResetPasswordView(generics.GenericAPIView):
 
         try:
             user = User.objects.get(password_reset_token=token)
-            # Check token expiry (1 hour)
-            if user.password_reset_token_created and \
-               timezone.now() - user.password_reset_token_created > timedelta(hours=1):
-                return Response({'detail': 'Токен истёк.'}, status=400)
-
-            user.set_password(new_password)
-            user.password_reset_token = ''
-            user.password_reset_token_created = None
-            user.save()
-            return Response({'detail': 'Пароль успешно изменён.'})
         except User.DoesNotExist:
             return Response({'detail': 'Недействительный токен.'}, status=400)
+
+        # Enforce 1-hour token expiry. Missing timestamp is treated as expired.
+        if not user.password_reset_token_created or \
+           timezone.now() - user.password_reset_token_created > timedelta(hours=1):
+            return Response({'detail': 'Токен истёк.'}, status=400)
+
+        user.set_password(new_password)
+        user.password_reset_token = ''
+        user.password_reset_token_created = None
+        user.save()
+        return Response({'detail': 'Пароль успешно изменён.'})
 
 
 @api_view(['GET'])

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Homework, Problem, ProblemOption, ProblemAttachment, Submission
+from .models import Homework, Problem, ProblemOption, ProblemAttachment, Submission, Tag
 
 
 class ProblemOptionInline(admin.TabularInline):
@@ -23,16 +23,24 @@ class ProblemInline(admin.TabularInline):
 
 @admin.register(Homework)
 class HomeworkAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'lesson', 'created_at']
+    list_display = ['__str__', 'lesson', 'due_date', 'created_at']
     search_fields = ['title', 'lesson__title']
     inlines = [ProblemInline]
 
 
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ['name', 'slug']
+    search_fields = ['name', 'slug']
+    prepopulated_fields = {'slug': ('name',)}
+
+
 @admin.register(Problem)
 class ProblemAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'answer_type', 'max_score', 'homework']
-    list_filter = ['answer_type']
-    search_fields = ['statement']
+    list_display = ['__str__', 'title', 'answer_type', 'max_score', 'level', 'in_bank', 'homework']
+    list_filter = ['answer_type', 'level', 'in_bank']
+    search_fields = ['statement', 'title', 'source']
+    filter_horizontal = ['tags']
     inlines = [ProblemOptionInline, ProblemAttachmentInline]
 
 

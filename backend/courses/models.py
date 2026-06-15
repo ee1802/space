@@ -75,8 +75,17 @@ class Lesson(models.Model):
         ('yandex', 'Yandex Disk'),
     ]
 
+    LESSON_TYPES = [
+        ('theory', 'Теория'),
+        ('practice', 'Практика'),
+        ('hard', 'Сложные задачи'),
+        ('test', 'Тест'),
+        ('mock', 'Пробник'),
+    ]
+
     topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='lessons')
     title = models.CharField(max_length=255)
+    lesson_type = models.CharField(max_length=20, choices=LESSON_TYPES, default='theory')
     lesson_date = models.DateField(null=True, blank=True)
     video_provider = models.CharField(max_length=20, choices=VIDEO_PROVIDERS, default='youtube')
     video_url = models.URLField(blank=True, default='')
@@ -94,6 +103,30 @@ class Lesson(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class LessonMaterial(models.Model):
+    """A downloadable material attached to a lesson (PDF конспект, формулы, карта неба...)."""
+    KINDS = [
+        ('notes', 'Конспект'),
+        ('formulas', 'Формулы'),
+        ('starmap', 'Карта звёздного неба'),
+        ('problems', 'Подборка задач'),
+        ('other', 'Другое'),
+    ]
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name='materials')
+    title = models.CharField(max_length=255)
+    kind = models.CharField(max_length=20, choices=KINDS, default='notes')
+    file = models.FileField(upload_to='lessons/materials/')
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'lesson_materials'
+        ordering = ['order']
+
+    def __str__(self):
+        return f'{self.title} ({self.lesson})'
 
 
 class LessonProgress(models.Model):

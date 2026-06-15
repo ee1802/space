@@ -1,18 +1,38 @@
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from courses.models import Enrollment
-from .models import Homework, Problem, ProblemOption, ProblemAttachment, Submission
+from .models import Homework, Problem, ProblemOption, ProblemAttachment, Submission, Tag
 from .serializers import (
     HomeworkSerializer, SubmissionSerializer, SubmitAnswerSerializer,
-    GradeSubmissionSerializer, AdminHomeworkSerializer, AdminProblemSerializer,
+    GradeSubmissionSerializer, ProblemSerializer, HomeworkOverviewSerializer,
+    TagWithCountSerializer,
+    AdminHomeworkSerializer, AdminProblemSerializer,
     AdminProblemOptionSerializer, AdminProblemAttachmentSerializer,
-    AdminSubmissionSerializer,
+    AdminSubmissionSerializer, AdminTagSerializer,
 )
-from .formula_checker import check_formula_equivalence, check_number_answer, check_choice_answer
+from .grading import grade_answer
 from core.permissions import IsAdmin
+
+
+def _enrolled_course_ids(user):
+    return Enrollment.objects.filter(user=user).values_list('course_id', flat=True)
+
+
+def _latest_submission_map(user, problems):
+    """Return {problem_id: latest Submission} for the given problems and user."""
+    problem_ids = [p.id if hasattr(p, 'id') else p for p in problems]
+    result = {}
+    subs = Submission.objects.filter(
+        user=user, problem_id__in=problem_ids
+    ).order_by('problem_id', '-submitted_at')
+    for sub in subs:
+        if sub.problem_id not in result:
+            result[sub.problem_id] = sub
+    return result
 
 
 # Student views
@@ -22,9 +42,7 @@ class LessonHomeworkView(generics.RetrieveAPIView):
 
     def get_object(self):
         lesson_id = self.kwargs['lesson_id']
-        enrolled_course_ids = Enrollment.objects.filter(
-            user=self.request.user
-        ).values_list('course_id', flat=True)
+        enrolled_course_ids = _enrolled_course_ids(self.request.user)
 
         return Homework.objects.get(
             lesson_id=lesson_id,
@@ -38,85 +56,33 @@ class LessonHomeworkView(generics.RetrieveAPIView):
 def submit_answer(request, problem_id):
     """Submit an answer to a problem."""
     try:
-        problem = Problem.objects.select_related('homework__lesson__topic__block__course').get(pk=problem_id)
+        problem = Problem.objects.select_related(
+            'homework__lesson__topic__block__course'
+        ).get(pk=problem_id)
     except Problem.DoesNotExist:
         return Response({'detail': 'Задача не найдена.'}, status=404)
 
-    # Check enrollment
-    course = problem.homework.lesson.topic.block.course
-    if not Enrollment.objects.filter(user=request.user, course=course).exists():
-        return Response({'detail': 'Нет доступа к курсу.'}, status=403)
+    # Check enrollment (bank-only problems with no homework are open to any user).
+    if problem.homework_id:
+        course = problem.homework.lesson.topic.block.course
+        if not Enrollment.objects.filter(user=request.user, course=course).exists():
+            return Response({'detail': 'Нет доступа к курсу.'}, status=403)
 
     serializer = SubmitAnswerSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     answer_data = serializer.validated_data['answer']
 
-    # Create submission
+    # Grade via the shared grader (text -> manual, others -> auto).
+    result = grade_answer(problem, answer_data)
+
     submission = Submission(
         user=request.user,
         problem=problem,
         answer=answer_data,
+        is_auto_checked=result['is_auto_checked'],
+        is_correct=result['is_correct'],
+        score=result['score'],
     )
-
-    # Auto-check based on answer type
-    if problem.answer_type == 'text':
-        submission.is_auto_checked = False
-        submission.is_correct = None
-        submission.score = None
-
-    elif problem.answer_type == 'choice_single':
-        submission.is_auto_checked = True
-        correct = problem.correct_answer
-        if correct and 'correct_option_id' in correct:
-            student_option = str(answer_data.get('option_id', ''))
-            submission.is_correct = student_option == str(correct['correct_option_id'])
-        else:
-            # Fallback: check from ProblemOption
-            correct_ids = list(
-                ProblemOption.objects.filter(problem=problem, is_correct=True)
-                .values_list('id', flat=True)
-            )
-            student_option = answer_data.get('option_id')
-            submission.is_correct = int(student_option) in correct_ids if student_option else False
-        submission.score = problem.max_score if submission.is_correct else 0
-
-    elif problem.answer_type == 'choice_multiple':
-        submission.is_auto_checked = True
-        correct = problem.correct_answer
-        if correct and 'correct_option_ids' in correct:
-            correct_ids = set(str(x) for x in correct['correct_option_ids'])
-            student_ids = set(str(x) for x in answer_data.get('option_ids', []))
-            submission.is_correct = correct_ids == student_ids
-        else:
-            correct_ids = set(
-                str(x) for x in ProblemOption.objects.filter(problem=problem, is_correct=True)
-                .values_list('id', flat=True)
-            )
-            student_ids = set(str(x) for x in answer_data.get('option_ids', []))
-            submission.is_correct = correct_ids == student_ids
-        submission.score = problem.max_score if submission.is_correct else 0
-
-    elif problem.answer_type == 'number':
-        submission.is_auto_checked = True
-        correct = problem.correct_answer or {}
-        submission.is_correct = check_number_answer(
-            answer_data.get('value'),
-            correct.get('value', 0),
-            correct.get('tolerance_type', 'abs'),
-            correct.get('tolerance', 0)
-        )
-        submission.score = problem.max_score if submission.is_correct else 0
-
-    elif problem.answer_type == 'formula':
-        submission.is_auto_checked = True
-        correct = problem.correct_answer or {}
-        student_latex = answer_data.get('latex', '')
-        correct_latex = correct.get('latex', '')
-
-        is_correct, method = check_formula_equivalence(student_latex, correct_latex)
-        submission.is_correct = is_correct
-        submission.score = problem.max_score if is_correct else 0
-
     if submission.is_auto_checked:
         submission.checked_at = timezone.now()
 
@@ -132,6 +98,212 @@ def my_submissions(request, problem_id):
         user=request.user, problem_id=problem_id
     ).order_by('-submitted_at')
     return Response(SubmissionSerializer(submissions, many=True).data)
+
+
+class ProblemBankView(generics.ListAPIView):
+    """
+    Problem bank: in_bank problems that belong to the student's enrolled
+    courses or are global (homework is null).
+    Filters: level, tag (slug), answer_type, q (statement/title), status.
+    """
+    serializer_class = ProblemSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        enrolled_course_ids = _enrolled_course_ids(user)
+
+        qs = Problem.objects.filter(in_bank=True).filter(
+            Q(homework__isnull=True) |
+            Q(homework__lesson__topic__block__course_id__in=enrolled_course_ids)
+        ).distinct().select_related(
+            'homework__lesson__topic__block__course'
+        ).prefetch_related('options', 'attachments', 'tags')
+
+        params = self.request.query_params
+
+        level = params.get('level')
+        if level:
+            qs = qs.filter(level=level)
+
+        tag = params.get('tag')
+        if tag:
+            qs = qs.filter(tags__slug=tag)
+
+        answer_type = params.get('answer_type')
+        if answer_type:
+            qs = qs.filter(answer_type=answer_type)
+
+        q = params.get('q')
+        if q:
+            qs = qs.filter(Q(statement__icontains=q) | Q(title__icontains=q))
+
+        status_param = params.get('status')
+        if status_param in ('solved', 'unsolved', 'wrong'):
+            qs = self._filter_by_status(qs, user, status_param)
+
+        return qs.distinct().order_by('level', 'order', 'id')
+
+    def _filter_by_status(self, qs, user, status_param):
+        problem_ids = list(qs.values_list('id', flat=True))
+        latest = _latest_submission_map(user, problem_ids)
+        keep = []
+        for pid in problem_ids:
+            sub = latest.get(pid)
+            if status_param == 'unsolved':
+                if sub is None or sub.is_correct is not True:
+                    keep.append(pid)
+            elif status_param == 'solved':
+                if sub is not None and sub.is_correct is True:
+                    keep.append(pid)
+            elif status_param == 'wrong':
+                if sub is not None and sub.is_correct is False:
+                    keep.append(pid)
+        return qs.filter(id__in=keep)
+
+
+class MyMistakesView(generics.ListAPIView):
+    """
+    Every problem where the student's LATEST submission is_correct=False,
+    across enrolled courses + bank. Filters: level, tag.
+    Returns problem (solution revealed) + the wrong submission.
+    """
+    serializer_class = ProblemSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        enrolled_course_ids = _enrolled_course_ids(user)
+
+        qs = Problem.objects.filter(
+            Q(homework__isnull=True) |
+            Q(homework__lesson__topic__block__course_id__in=enrolled_course_ids)
+        ).distinct().select_related(
+            'homework__lesson__topic__block__course'
+        ).prefetch_related('options', 'attachments', 'tags')
+
+        params = self.request.query_params
+        level = params.get('level')
+        if level:
+            qs = qs.filter(level=level)
+        tag = params.get('tag')
+        if tag:
+            qs = qs.filter(tags__slug=tag)
+
+        problem_ids = list(qs.values_list('id', flat=True))
+        latest = _latest_submission_map(user, problem_ids)
+        wrong_ids = [pid for pid, sub in latest.items() if sub.is_correct is False]
+        self._latest = latest
+        return qs.filter(id__in=wrong_ids).distinct().order_by('level', 'order', 'id')
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        objects = page if page is not None else queryset
+
+        data = []
+        for problem in objects:
+            problem_data = ProblemSerializer(problem, context={'request': request}).data
+            sub = self._latest.get(problem.id)
+            data.append({
+                'problem': problem_data,
+                'submission': SubmissionSerializer(sub).data if sub else None,
+            })
+
+        if page is not None:
+            return self.get_paginated_response(data)
+        return Response(data)
+
+
+class MyHomeworkOverviewView(generics.ListAPIView):
+    """
+    List of all homeworks across enrolled courses with aggregate status,
+    for the «Домашние задания» dashboard.
+    """
+    serializer_class = HomeworkOverviewSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        enrolled_course_ids = _enrolled_course_ids(self.request.user)
+        return Homework.objects.filter(
+            lesson__topic__block__course_id__in=enrolled_course_ids,
+            lesson__is_published=True,
+        ).select_related(
+            'lesson__topic__block__course'
+        ).prefetch_related('problems').order_by(
+            'lesson__topic__block__order', 'lesson__topic__order', 'lesson__order'
+        )
+
+    def list(self, request, *args, **kwargs):
+        user = request.user
+        homeworks = list(self.get_queryset())
+
+        all_problem_ids = []
+        for hw in homeworks:
+            all_problem_ids.extend([p.id for p in hw.problems.all()])
+        latest = _latest_submission_map(user, all_problem_ids)
+
+        data = []
+        for hw in homeworks:
+            problems = list(hw.problems.all())
+            lesson = hw.lesson
+            course = lesson.topic.block.course
+            data.append({
+                'lesson_id': lesson.id,
+                'lesson_title': lesson.title,
+                'course_id': course.id,
+                'course_title': course.title,
+                'homework_id': hw.id,
+                'title': hw.title or str(hw),
+                'due_date': hw.due_date,
+                'problem_count': len(problems),
+                'status': self._aggregate_status(problems, latest),
+            })
+        return Response(data)
+
+    def _aggregate_status(self, problems, latest):
+        """
+        not_started: no submissions at all.
+        in_progress: some answered, some not.
+        pending: all answered but at least one awaiting manual check.
+        wrong: all answered, none pending, at least one wrong.
+        done: all answered correctly.
+        """
+        if not problems:
+            return 'not_started'
+
+        statuses = []
+        for p in problems:
+            sub = latest.get(p.id)
+            if sub is None:
+                statuses.append('none')
+            elif p.answer_type == 'text' and sub.is_correct is None:
+                statuses.append('pending')
+            elif sub.is_correct is True:
+                statuses.append('correct')
+            elif sub.is_correct is False:
+                statuses.append('wrong')
+            else:
+                statuses.append('pending')
+
+        if all(s == 'none' for s in statuses):
+            return 'not_started'
+        if any(s == 'none' for s in statuses):
+            return 'in_progress'
+        if any(s == 'pending' for s in statuses):
+            return 'pending'
+        if any(s == 'wrong' for s in statuses):
+            return 'wrong'
+        return 'done'
+
+
+class TagListView(generics.ListAPIView):
+    """All tags with problem counts."""
+    serializer_class = TagWithCountSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return Tag.objects.annotate(
+            problem_count=Count('problems')
+        ).order_by('name')
 
 
 # Admin views
@@ -152,7 +324,8 @@ class AdminProblemListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdmin]
     serializer_class = AdminProblemSerializer
     queryset = Problem.objects.all()
-    filterset_fields = ['homework', 'answer_type']
+    filterset_fields = ['homework', 'answer_type', 'level', 'in_bank', 'tags']
+    search_fields = ['statement', 'title', 'source']
 
 
 class AdminProblemDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -185,6 +358,19 @@ class AdminProblemAttachmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdmin]
     serializer_class = AdminProblemAttachmentSerializer
     queryset = ProblemAttachment.objects.all()
+
+
+class AdminTagListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAdmin]
+    serializer_class = AdminTagSerializer
+    queryset = Tag.objects.all()
+    search_fields = ['name', 'slug']
+
+
+class AdminTagDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAdmin]
+    serializer_class = AdminTagSerializer
+    queryset = Tag.objects.all()
 
 
 class AdminSubmissionListView(generics.ListAPIView):

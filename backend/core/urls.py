@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     # Auth
+    path('auth/send-code', views.SendCodeView.as_view(), name='send-code'),
     path('auth/register', views.RegisterView.as_view(), name='register'),
     path('auth/login', views.LoginView.as_view(), name='login'),
     path('auth/logout', views.logout_view, name='logout'),

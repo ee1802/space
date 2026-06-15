@@ -22,17 +22,28 @@
 
 
 ### Личный кабинет ученика
-- Регистрация и авторизация (email + пароль)
-- Подтверждение email, сброс пароля
-- Дашборд с курсами и ближайшими олимпиадами
-- Просмотр курсов (блоки → темы → занятия)
-- Страница занятия: видео (YouTube embed), конспект с формулами, PDF-файлы
+- Регистрация с подтверждением по 6-значному коду (email) и авторизация (email + пароль)
+- Выход с блокировкой refresh-токена (token blacklist), сброс пароля
+- Дашборд с курсами, прогрессом и ближайшими олимпиадами
+- Просмотр курсов (блоки → темы → занятия) с прогрессом и переходом к следующему занятию
+- Типы занятий: теория, практика, повышенная сложность, тест, пробник (`theory|practice|hard|test|mock`)
+- Страница занятия: видео (YouTube embed), конспект с формулами, PDF-материалы, статус ДЗ
+- Агрегированная библиотека материалов (PDF) с поиском и фильтром по типу
 - Домашние задания с 5 типами ответов:
   - Текстовый ответ (ручная проверка)
   - Одиночный выбор (автопроверка)
   - Множественный выбор (автопроверка)
   - Числовой ответ с допуском (автопроверка)
   - Формула с клавиатурой MathLive (автопроверка через SymPy)
+- Банк задач по уровням (школьный, муниципальный, региональный, заключительный) с фильтрами по теме (тегу), типу ответа и статусу
+- Разбор (решение) задачи, открывающийся после сдачи; работа над ошибками (все неверно решённые задачи)
+- Дашборд домашних заданий со статусами: сдано, не сделано, на проверке, ошибка
+- Пробные олимпиады на время: серверный таймер (дедлайн), попытки, автоматическое раскрытие результатов и решений после завершения
+- Аналитика: сильные/слабые темы, точность, статистика по уровням и типам, активность за 30 дней
+- Персональные рекомендации по обучению (эвристика + опциональное обогащение ИИ)
+- Единый поиск по занятиям, задачам и материалам
+- Вовлечённость: избранное, оценки и комментарии к занятиям, вопросы преподавателю
+- Единое расписание: события олимпиад + дедлайны ДЗ + ближайшие занятия
 - Календарь олимпиад с фильтрацией по типам
 - Тренажёр звёздного неба (ссылка на внешний https://apex-skychart.ru)
 - Профиль с редактированием и сменой пароля
@@ -93,7 +104,8 @@ pip install -r requirements.txt
 
 # Настроить переменные окружения (или использовать SQLite по умолчанию)
 export DJANGO_DEBUG=True
-export DJANGO_SECRET_KEY=dev-secret
+export DJANGO_SECRET_KEY=dev-secret  # обязателен, если DJANGO_DEBUG=False
+# export ANTHROPIC_API_KEY=sk-ant-...  # опционально: ИИ-обогащение рекомендаций
 
 python manage.py migrate
 python manage.py seed_data
@@ -114,10 +126,13 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api pnpm dev
 space/
 ├── backend/
 │   ├── config/          # Django settings, urls, wsgi
-│   ├── core/            # User model, auth views, permissions, throttles
-│   ├── courses/         # Courses, blocks, topics, lessons
-│   ├── homework/        # Homework, problems, submissions, formula checker
-│   ├── calendar_app/    # Olympiad events and types
+│   ├── core/            # User model, auth views (email-код), permissions, throttles
+│   ├── courses/         # Courses, blocks, topics, lessons, materials
+│   ├── homework/        # Homework, problems, problem bank, submissions, formula checker
+│   ├── olympiads/       # Timed mock olympiads (попытки, серверный таймер)
+│   ├── analytics/       # Stats, recommendations (ИИ-обогащение), unified search
+│   ├── engagement/      # Favorites, ratings, questions to teacher
+│   ├── calendar_app/    # Olympiad events, types, unified schedule
 │   ├── manage.py
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -154,9 +169,10 @@ space/
 ### Аутентификация
 | Метод | URL | Описание |
 |-------|-----|----------|
-| POST | `/api/auth/register` | Регистрация |
+| POST | `/api/auth/send-code` | Отправить 6-значный код на email |
+| POST | `/api/auth/register` | Регистрация (с проверкой кода) |
 | POST | `/api/auth/login` | Вход |
-| POST | `/api/auth/logout` | Выход |
+| POST | `/api/auth/logout` | Выход (блокировка refresh-токена) |
 | GET | `/api/auth/me` | Текущий пользователь |
 | POST | `/api/auth/token/refresh` | Обновление JWT |
 | GET | `/api/auth/verify-email` | Подтверждение email |
@@ -166,26 +182,62 @@ space/
 ### Курсы (ученик)
 | Метод | URL | Описание |
 |-------|-----|----------|
-| GET | `/api/me/courses` | Мои курсы |
-| GET | `/api/courses/{id}` | Детали курса |
-| GET | `/api/lessons/{id}` | Детали занятия |
+| GET | `/api/me/courses` | Мои курсы (прогресс, кол-во занятий, следующее занятие) |
+| GET | `/api/courses/{id}` | Детали курса (типы занятий, статус ДЗ) |
+| GET | `/api/lessons/{id}` | Детали занятия (тип, материалы) |
 | POST | `/api/lessons/{id}/watch` | Отметить просмотренным |
+| GET | `/api/me/materials` | Библиотека PDF-материалов (фильтры `?q=&kind=`) |
 
-### Домашние задания
+### Домашние задания и банк задач
 | Метод | URL | Описание |
 |-------|-----|----------|
 | GET | `/api/lessons/{id}/homework` | ДЗ занятия |
 | POST | `/api/problems/{id}/submit` | Отправить ответ |
 | GET | `/api/me/submissions/{problem_id}` | Мои попытки |
+| GET | `/api/problems/bank` | Банк задач (фильтры `?level=&tag=&answer_type=&q=&status=`) |
+| GET | `/api/me/mistakes` | Работа над ошибками (с разбором) |
+| GET | `/api/me/homework` | Дашборд ДЗ со статусами |
+| GET | `/api/tags` | Темы (теги) задач |
 
-### Календарь
+### Пробные олимпиады
+| Метод | URL | Описание |
+|-------|-----|----------|
+| GET | `/api/olympiads` | Список пробников |
+| GET | `/api/olympiads/{id}` | Детали пробника |
+| POST | `/api/olympiads/{id}/start` | Начать попытку |
+| GET | `/api/olympiads/attempts/{id}` | Состояние попытки |
+| POST | `/api/olympiads/attempts/{id}/answer` | Сохранить ответ |
+| POST | `/api/olympiads/attempts/{id}/finish` | Завершить (результат + решения) |
+| GET | `/api/me/olympiad-attempts` | Мои попытки |
+
+### Аналитика
+| Метод | URL | Описание |
+|-------|-----|----------|
+| GET | `/api/me/stats` | Статистика (темы, точность, активность за 30 дней) |
+| GET | `/api/me/recommendations` | Рекомендации по обучению (опц. ИИ) |
+| GET | `/api/search` | Единый поиск (`?q=`) по занятиям/задачам/материалам |
+
+### Вовлечённость
+| Метод | URL | Описание |
+|-------|-----|----------|
+| GET | `/api/me/favorites` | Избранное |
+| POST | `/api/me/favorites/toggle` | Добавить/убрать из избранного |
+| POST | `/api/lessons/{id}/rate` | Оценить занятие |
+| GET | `/api/lessons/{id}/rating` | Рейтинг занятия |
+| POST | `/api/questions` | Задать вопрос |
+| GET | `/api/me/questions` | Мои вопросы |
+| GET | `/api/questions` | Вопросы (фильтр `?lesson={id}`) |
+
+### Календарь и расписание
 | Метод | URL | Описание |
 |-------|-----|----------|
 | GET | `/api/calendar/events` | Список событий |
 | GET | `/api/calendar/event-types` | Типы событий |
+| GET | `/api/me/schedule` | Единое расписание (фильтры `?from=&to=&kind=`) |
 
 ### Админ API
 Все CRUD-эндпоинты доступны по `/api/admin/*` для пользователей с `is_admin=True`.
+Дополнительно: `GET /api/admin/questions` (вопросы учеников) и `POST /api/admin/questions/{id}/answer` (ответ на вопрос).
 
 ## Переменные окружения
 

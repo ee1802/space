@@ -1,5 +1,19 @@
 from rest_framework import serializers
-from .models import Homework, Problem, ProblemOption, ProblemAttachment, Submission
+from .models import Homework, Problem, ProblemOption, ProblemAttachment, Submission, Tag
+
+
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = ['id', 'name', 'slug']
+
+
+class TagWithCountSerializer(serializers.ModelSerializer):
+    problem_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Tag
+        fields = ['id', 'name', 'slug', 'problem_count']
 
 
 class ProblemOptionSerializer(serializers.ModelSerializer):
@@ -22,25 +36,69 @@ class ProblemAttachmentSerializer(serializers.ModelSerializer):
         return obj.file.url if obj.file else None
 
 
+def _problem_status_from_submission(sub, problem):
+    """Derive a student's status for a problem from their latest submission."""
+    if sub is None:
+        return 'not_started'
+    if problem.answer_type == 'text' and sub.is_correct is None:
+        return 'pending'
+    if sub.is_correct is True:
+        return 'correct'
+    if sub.score is not None and 0 < sub.score < problem.max_score:
+        return 'partial'
+    if sub.is_correct is False:
+        return 'wrong'
+    return 'pending'
+
+
 class ProblemSerializer(serializers.ModelSerializer):
     """Problem serializer for students - hides correct answers."""
     options = ProblemOptionSerializer(many=True, read_only=True)
     attachments = ProblemAttachmentSerializer(many=True, read_only=True)
+    tags = TagSerializer(many=True, read_only=True)
     latest_submission = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    solution = serializers.SerializerMethodField()
+    lesson_id = serializers.SerializerMethodField()
+    course_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Problem
-        fields = ['id', 'order', 'statement', 'answer_type', 'max_score',
-                  'hint', 'options', 'attachments', 'latest_submission']
+        fields = ['id', 'order', 'title', 'statement', 'answer_type', 'max_score',
+                  'hint', 'level', 'source', 'tags', 'options', 'attachments',
+                  'status', 'solution', 'lesson_id', 'course_id', 'latest_submission']
 
-    def get_latest_submission(self, obj):
+    def _get_latest_submission_obj(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            sub = Submission.objects.filter(
+            return Submission.objects.filter(
                 user=request.user, problem=obj
             ).order_by('-submitted_at').first()
-            if sub:
-                return SubmissionSerializer(sub).data
+        return None
+
+    def get_latest_submission(self, obj):
+        sub = self._get_latest_submission_obj(obj)
+        if sub:
+            return SubmissionSerializer(sub).data
+        return None
+
+    def get_status(self, obj):
+        return _problem_status_from_submission(self._get_latest_submission_obj(obj), obj)
+
+    def get_solution(self, obj):
+        # Only reveal the solution once the student has submitted at least once.
+        if self._get_latest_submission_obj(obj) is not None:
+            return obj.solution
+        return ''
+
+    def get_lesson_id(self, obj):
+        if obj.homework_id and obj.homework and obj.homework.lesson_id:
+            return obj.homework.lesson_id
+        return None
+
+    def get_course_id(self, obj):
+        if obj.homework_id and obj.homework and obj.homework.lesson_id:
+            return obj.homework.lesson.topic.block.course_id
         return None
 
 
@@ -50,7 +108,7 @@ class HomeworkSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Homework
-        fields = ['id', 'title', 'lesson', 'lesson_title', 'problems',
+        fields = ['id', 'title', 'lesson', 'lesson_title', 'due_date', 'problems',
                   'created_at', 'updated_at']
 
 
@@ -61,6 +119,19 @@ class SubmissionSerializer(serializers.ModelSerializer):
                   'is_correct', 'score', 'admin_comment', 'submitted_at', 'checked_at']
         read_only_fields = ['id', 'user', 'is_auto_checked', 'is_correct',
                            'score', 'admin_comment', 'submitted_at', 'checked_at']
+
+
+class HomeworkOverviewSerializer(serializers.Serializer):
+    """Aggregate view of a homework for the «Домашние задания» dashboard."""
+    lesson_id = serializers.IntegerField()
+    lesson_title = serializers.CharField()
+    course_id = serializers.IntegerField()
+    course_title = serializers.CharField()
+    homework_id = serializers.IntegerField()
+    title = serializers.CharField()
+    due_date = serializers.DateTimeField()
+    problem_count = serializers.IntegerField()
+    status = serializers.CharField()
 
 
 class SubmitAnswerSerializer(serializers.Serializer):
@@ -74,6 +145,12 @@ class GradeSubmissionSerializer(serializers.Serializer):
 
 
 # Admin serializers
+class AdminTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = '__all__'
+
+
 class AdminProblemOptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProblemOption
@@ -89,6 +166,7 @@ class AdminProblemAttachmentSerializer(serializers.ModelSerializer):
 class AdminProblemSerializer(serializers.ModelSerializer):
     options = AdminProblemOptionSerializer(many=True, read_only=True)
     attachments = AdminProblemAttachmentSerializer(many=True, read_only=True)
+    tag_details = TagSerializer(source='tags', many=True, read_only=True)
 
     class Meta:
         model = Problem

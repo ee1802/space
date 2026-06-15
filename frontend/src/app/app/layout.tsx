@@ -4,13 +4,79 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
-import { courses as coursesAPI } from '@/lib/api';
+import { courses as coursesAPI, unwrap, Course } from '@/lib/api';
+import { ToastHost } from '@/components/ui';
 
 interface CourseItem {
   id: number;
   title: string;
-  slug: string;
+  slug?: string;
 }
+
+// SVG icon paths (24x24 stroke icons)
+const iconPaths: Record<string, string> = {
+  home: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  bank: 'M4 7h16M4 12h16M4 17h16M7 4v16',
+  mock: 'M12 2l2.4 7.4H22l-6 4.5 2.3 7.1L12 16.6 5.7 21l2.3-7.1-6-4.5h7.6z',
+  mistakes: 'M12 9v4M12 17h.01M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z',
+  stats: 'M3 3v18h18M7 16l4-5 3 3 5-7',
+  materials: 'M4 4h10l6 6v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM14 4v6h6',
+  schedule: 'M9 11l3 3 8-8M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
+  calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+  favorites: 'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7z',
+  questions: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  trainer: 'M3 18l4-8 4 4M11 14l3-6 3 3M14 11l4-8M19 3l2 1M12 22v-4M9 22h6',
+  courses: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z',
+  star: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
+  logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
+  chevronDown: 'M6 9l6 6 6-6',
+  chevronRight: 'M9 18l6-6-6-6',
+  menu: 'M3 12h18M3 6h18M3 18h18',
+  externalLink: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35',
+};
+
+function SvgIcon({ name, size = 18, className = '' }: { name: string; size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
+      className={className} aria-hidden="true">
+      <path d={iconPaths[name] || iconPaths.home} />
+    </svg>
+  );
+}
+
+// Grouped navigation surfacing every feature.
+const NAV_GROUPS: Array<{ label?: string; items: Array<{ href: string; label: string; icon: string }> }> = [
+  {
+    items: [{ href: '/app', label: 'Главная', icon: 'home' }],
+  },
+  {
+    label: 'Учёба',
+    items: [
+      { href: '/app/bank', label: 'Банк задач', icon: 'bank' },
+      { href: '/app/mock', label: 'Пробные олимпиады', icon: 'mock' },
+      { href: '/app/trainer', label: 'Тренажёр', icon: 'trainer' },
+      { href: '/app/mistakes', label: 'Мои ошибки', icon: 'mistakes' },
+    ],
+  },
+  {
+    label: 'Прогресс',
+    items: [
+      { href: '/app/stats', label: 'Статистика', icon: 'stats' },
+      { href: '/app/schedule', label: 'Расписание', icon: 'schedule' },
+      { href: '/app/calendar', label: 'Календарь олимпиад', icon: 'calendar' },
+    ],
+  },
+  {
+    label: 'Библиотека',
+    items: [
+      { href: '/app/materials', label: 'Материалы', icon: 'materials' },
+      { href: '/app/favorites', label: 'Избранное', icon: 'favorites' },
+      { href: '/app/questions', label: 'Вопросы', icon: 'questions' },
+    ],
+  },
+];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, token, loading, logout } = useAuth();
@@ -19,6 +85,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [myCourses, setMyCourses] = useState<CourseItem[]>([]);
   const [coursesOpen, setCoursesOpen] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -28,56 +95,48 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (token) {
-      coursesAPI.myCourses(token).then((data: any) => {
-        setMyCourses(data.results || data || []);
-      }).catch(() => {});
+      coursesAPI.myCourses(token)
+        .then((data) => setMyCourses(unwrap<Course>(data)))
+        .catch(() => {});
     }
   }, [token]);
 
+  // Close mobile drawer on route change.
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#070C18]">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D9A441]"></div>
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#1E2D4A] border-t-[#D9A441]" />
     </div>
   );
   if (!user) return null;
 
-  const navItems = [
-    { href: '/app', label: 'Главная', icon: 'home' },
-    { href: '/app/calendar', label: 'Олимпиады', icon: 'calendar' },
-    { href: '/app/trainer', label: 'Тренажёр', icon: 'telescope' },
-  ];
+  const isActive = (href: string) =>
+    href === '/app' ? pathname === '/app' : pathname === href || pathname.startsWith(href + '/');
 
-  const isActive = (href: string) => pathname === href;
-  const isCourseActive = pathname.startsWith('/app/courses');
+  const navLinkClass = (active: boolean) =>
+    `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm mb-0.5 transition-all border-l-[3px] ${
+      active
+        ? 'bg-[#152035] text-[#4ECDD4] font-medium border-[#4ECDD4]'
+        : 'text-[#A8A5A0] hover:bg-[#152035] hover:text-[#F0EDE8] border-transparent'
+    }`;
 
-  // SVG icon paths matching the design archive
-  const iconPaths: Record<string, string> = {
-    home: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
-    calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
-    telescope: 'M3 18l4-8 4 4M11 14l3-6 3 3M14 11l4-8M19 3l2 1M12 22v-4M9 22h6',
-    star: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
-    user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-    logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
-    chevronDown: 'M6 9l6 6 6-6',
-    chevronRight: 'M9 18l6-6-6-6',
-    menu: 'M3 12h18M3 6h18M3 18h18',
-    externalLink: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3',
+  const submitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = search.trim();
+    if (!q) return;
+    router.push(`/app/bank?q=${encodeURIComponent(q)}`);
   };
-
-  const SvgIcon = ({ name, size = 18, className = '' }: { name: string; size?: number; className?: string }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
-      className={className}>
-      <path d={iconPaths[name] || iconPaths.home} />
-    </svg>
-  );
 
   return (
     <div className="min-h-screen flex bg-[#070C18]">
       {/* Mobile hamburger */}
       <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-[#0D1525] border border-[#1E2D4A] rounded-lg shadow-lg text-[#A8A5A0]"
+        onClick={() => setSidebarOpen((v) => !v)}
+        aria-label={sidebarOpen ? 'Закрыть меню' : 'Открыть меню'}
+        className="md:hidden fixed top-3 left-3 z-50 p-2 bg-[#0D1525] border border-[#1E2D4A] rounded-lg shadow-lg text-[#A8A5A0]"
       >
         <SvgIcon name="menu" size={20} />
       </button>
@@ -110,28 +169,46 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <span className="font-serif text-xl font-semibold text-[#F0EDE8] tracking-tight">apeks</span>
         </div>
 
+        {/* Global search */}
+        <div className="px-3 pt-3">
+          <form onSubmit={submitSearch} className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6A6860] pointer-events-none">
+              <SvgIcon name="search" size={15} />
+            </span>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Поиск..."
+              aria-label="Поиск по платформе"
+              className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#152035] border border-[#1E2D4A] text-sm text-[#F0EDE8] placeholder-[#6A6860] focus:outline-none focus:border-[#4ECDD4] focus:ring-1 focus:ring-[#4ECDD4] transition-colors"
+            />
+          </form>
+        </div>
+
         {/* Navigation */}
-        <nav className="p-2 flex-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm mb-0.5 transition-all ${
-                isActive(item.href)
-                  ? 'bg-[#152035] text-[#4ECDD4] font-medium border-l-[3px] border-[#4ECDD4]'
-                  : 'text-[#A8A5A0] hover:bg-[#152035] hover:text-[#F0EDE8] border-l-[3px] border-transparent'
-              }`}
-            >
-              <SvgIcon name={item.icon} size={18} />
-              {item.label}
-            </Link>
+        <nav className="p-2 flex-1 overflow-y-auto scrollbar-thin">
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={gi} className={gi === 0 ? '' : 'mt-4'}>
+              {group.label && (
+                <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#6A6860]">
+                  {group.label}
+                </p>
+              )}
+              {group.items.map((item) => (
+                <Link key={item.href} href={item.href} className={navLinkClass(isActive(item.href))}>
+                  <SvgIcon name={item.icon} size={18} />
+                  {item.label}
+                </Link>
+              ))}
+            </div>
           ))}
 
           {/* Courses section - expandable */}
           <div className="mt-4">
             <button
-              onClick={() => setCoursesOpen(!coursesOpen)}
+              onClick={() => setCoursesOpen((v) => !v)}
+              aria-expanded={coursesOpen}
               className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#6A6860] hover:text-[#A8A5A0]"
             >
               <span>Курсы</span>
@@ -146,14 +223,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <Link
                       key={c.id}
                       href={`/app/courses/${c.id}`}
-                      onClick={() => setSidebarOpen(false)}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm mb-0.5 transition-all ${
-                        pathname.startsWith(`/app/courses/${c.id}`)
-                          ? 'bg-[#152035] text-[#4ECDD4] font-medium border-l-[3px] border-[#4ECDD4]'
-                          : 'text-[#A8A5A0] hover:bg-[#152035] hover:text-[#F0EDE8] border-l-[3px] border-transparent'
-                      }`}
+                      className={navLinkClass(pathname.startsWith(`/app/courses/${c.id}`))}
                     >
-                      <SvgIcon name="star" size={16} />
+                      <SvgIcon name="courses" size={16} />
                       <span className="truncate">{c.title}</span>
                     </Link>
                   ))
@@ -167,7 +239,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="p-2 border-t border-[#1E2D4A]">
           <Link
             href="/app/profile"
-            onClick={() => setSidebarOpen(false)}
             className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm mb-0.5 transition-all ${
               isActive('/app/profile')
                 ? 'bg-[#152035] text-[#4ECDD4] font-medium'
@@ -223,6 +294,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 p-4 md:p-8 min-w-0 bg-[#070C18] text-[#F0EDE8]">
         {children}
       </main>
+
+      {/* Global toast host */}
+      <ToastHost />
     </div>
   );
 }

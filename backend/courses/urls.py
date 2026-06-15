@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     # Student
     path('me/courses', views.MyCoursesView.as_view(), name='my-courses'),
+    path('me/materials', views.my_materials, name='my-materials'),
     path('courses/<int:pk>', views.CourseDetailView.as_view(), name='course-detail'),
     path('lessons/<int:pk>', views.LessonDetailView.as_view(), name='lesson-detail'),
     path('lessons/<int:pk>/watch', views.mark_lesson_watched, name='lesson-watch'),
@@ -17,6 +18,8 @@ urlpatterns = [
     path('admin/topics/<int:pk>', views.AdminTopicDetailView.as_view(), name='admin-topic-detail'),
     path('admin/lessons', views.AdminLessonListCreateView.as_view(), name='admin-lessons'),
     path('admin/lessons/<int:pk>', views.AdminLessonDetailView.as_view(), name='admin-lesson-detail'),
+    path('admin/lesson-materials', views.AdminLessonMaterialListCreateView.as_view(), name='admin-lesson-materials'),
+    path('admin/lesson-materials/<int:pk>', views.AdminLessonMaterialDetailView.as_view(), name='admin-lesson-material-detail'),
     path('admin/enrollments', views.AdminEnrollmentListView.as_view(), name='admin-enrollments'),
     path('admin/enrollments/<int:pk>', views.AdminEnrollmentDetailView.as_view(), name='admin-enrollment-detail'),
     path('admin/users/<int:user_id>/enroll', views.admin_enroll_user, name='admin-enroll'),

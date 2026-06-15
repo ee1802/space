@@ -5,6 +5,7 @@ urlpatterns = [
     # Student
     path('calendar/events', views.EventListView.as_view(), name='events'),
     path('calendar/event-types', views.EventTypeListView.as_view(), name='event-types'),
+    path('me/schedule', views.MyScheduleView.as_view(), name='my-schedule'),
 
     # Admin
     path('admin/events', views.AdminEventListCreateView.as_view(), name='admin-events'),

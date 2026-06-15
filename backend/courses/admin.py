@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import Course, Enrollment, Block, Topic, Lesson, LessonProgress
+from .models import (
+    Course, Enrollment, Block, Topic, Lesson, LessonMaterial, LessonProgress,
+)
 
 
 class BlockInline(admin.TabularInline):
@@ -19,7 +21,14 @@ class TopicInline(admin.TabularInline):
 class LessonInline(admin.TabularInline):
     model = Lesson
     extra = 0
-    fields = ['title', 'lesson_date', 'video_url', 'is_published', 'order']
+    fields = ['title', 'lesson_type', 'lesson_date', 'video_url', 'is_published', 'order']
+    ordering = ['order']
+
+
+class LessonMaterialInline(admin.TabularInline):
+    model = LessonMaterial
+    extra = 0
+    fields = ['title', 'kind', 'file', 'order']
     ordering = ['order']
 
 
@@ -50,9 +59,17 @@ class TopicAdmin(admin.ModelAdmin):
 
 @admin.register(Lesson)
 class LessonAdmin(admin.ModelAdmin):
-    list_display = ['title', 'topic', 'lesson_date', 'is_published', 'order']
-    list_filter = ['is_published', 'topic__block__course']
+    list_display = ['title', 'topic', 'lesson_type', 'lesson_date', 'is_published', 'order']
+    list_filter = ['is_published', 'lesson_type', 'topic__block__course']
     search_fields = ['title']
+    inlines = [LessonMaterialInline]
+
+
+@admin.register(LessonMaterial)
+class LessonMaterialAdmin(admin.ModelAdmin):
+    list_display = ['title', 'lesson', 'kind', 'order']
+    list_filter = ['kind']
+    search_fields = ['title', 'lesson__title']
 
 
 @admin.register(Enrollment)
