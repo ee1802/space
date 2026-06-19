@@ -9,7 +9,7 @@ from courses.models import Course, Enrollment, Block, Topic, Lesson, LessonProgr
 from homework.models import Homework, Problem, ProblemOption, Tag, Submission
 from homework.grading import grade_answer
 from calendar_app.models import OlympiadEventType, OlympiadEvent
-from olympiads.models import MockOlympiad, MockProblem
+from olympiads.models import MockOlympiad, MockProblem, MockAttempt, MockAnswer
 from engagement.models import Favorite, LessonRating, Question
 
 
@@ -515,9 +515,148 @@ class Command(BaseCommand):
                       'description': 'Открытая олимпиада по астрономии СПбГУ.', 'external_url': 'https://olymp.spbu.ru/'},
         )
 
+        # ---- Extra demo content: fill the remaining type gaps -------------------
+        # A "mock" type lesson (the only LESSON_TYPES value not yet demoed).
+        Lesson.objects.get_or_create(
+            topic=topic2_2, order=3,
+            defaults={
+                'title': 'Пробный мини-тур по координатам',
+                'lesson_type': 'mock',
+                'lesson_date': date.today() + timedelta(days=40),
+                'video_url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                'description': 'Тренировочный мини-тур по небесным координатам в формате олимпиады.',
+                'is_published': True,
+            },
+        )
+
+        # A choice_multiple bank problem (the only answer type not yet demoed).
+        pm, pm_created = Problem.objects.get_or_create(
+            homework=None, title='Верные утверждения о законах Кеплера',
+            defaults={
+                'statement': 'Отметьте все верные утверждения о законах Кеплера.',
+                'answer_type': 'choice_multiple', 'max_score': 3, 'level': 'municipal',
+                'in_bank': True, 'order': 0,
+                'solution': 'Первый закон — об эллиптических орбитах; второй — о равных площадях; '
+                            'третий связывает периоды и большие полуоси. В общем случае орбиты не круговые.',
+            },
+        )
+        if pm_created:
+            ProblemOption.objects.create(problem=pm, order=1, text='Орбита планеты — эллипс с Солнцем в фокусе', is_correct=True)
+            ProblemOption.objects.create(problem=pm, order=2, text='Радиус-вектор за равные времена описывает равные площади', is_correct=True)
+            ProblemOption.objects.create(problem=pm, order=3, text='Все планеты движутся по идеальным окружностям', is_correct=False)
+            ProblemOption.objects.create(problem=pm, order=4, text='Квадрат периода пропорционален кубу большой полуоси', is_correct=True)
+        pm.tags.add(tags['Законы Кеплера'])
+
+        # ---- Second course (breadth: multi-course UI) ---------------------------
+        course2, _ = Course.objects.get_or_create(
+            slug='fizika-dlya-astronomov',
+            defaults={
+                'title': 'Физика и математика для астрономов',
+                'description': 'Подготовительный курс: механика, оптика и математический аппарат, '
+                               'необходимые для олимпиадной астрономии.',
+                'is_published': True,
+            },
+        )
+        b2_1, _ = Block.objects.get_or_create(
+            course=course2, order=1,
+            defaults={'title': 'Механика для астрономов', 'description': 'Кинематика и динамика в задачах астрономии.'},
+        )
+        t2_1, _ = Topic.objects.get_or_create(
+            block=b2_1, order=1, defaults={'title': 'Кинематика', 'description': 'Движение и системы отсчёта.'},
+        )
+        Lesson.objects.get_or_create(
+            topic=t2_1, order=1,
+            defaults={'title': 'Системы отсчёта и относительность движения', 'lesson_type': 'theory',
+                      'lesson_date': date.today() - timedelta(days=3),
+                      'video_url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                      'description': 'Инерциальные системы отсчёта, сложение скоростей.', 'is_published': True},
+        )
+        Lesson.objects.get_or_create(
+            topic=t2_1, order=2,
+            defaults={'title': 'Практика: относительные скорости', 'lesson_type': 'practice',
+                      'lesson_date': date.today() + timedelta(days=4),
+                      'video_url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                      'description': 'Разбор задач на относительное движение.', 'is_published': True},
+        )
+
+        # ---- Primary QA test accounts (rich, ready-to-demo student) -------------
+        admin2, created = User.objects.get_or_create(
+            email='admin@apex.test',
+            defaults={'full_name': 'Тест Админ', 'is_admin': True, 'is_staff': True,
+                      'is_superuser': True, 'is_email_verified': True},
+        )
+        if created:
+            admin2.set_password('AdminApex2026!')
+            admin2.save()
+
+        demo, created = User.objects.get_or_create(
+            email='student@apex.test',
+            defaults={'full_name': 'Тест Ученик', 'is_email_verified': True},
+        )
+        if created:
+            demo.set_password('StudentApex2026!')
+            demo.save()
+
+        Enrollment.objects.get_or_create(user=demo, course=course)
+        Enrollment.objects.get_or_create(user=demo, course=course2)
+        Enrollment.objects.get_or_create(user=student1, course=course2)
+
+        # demo activity: watched lessons
+        for lesson in [lesson1_1_1, lesson1_1_2, lesson1_2_1]:
+            lp, _ = LessonProgress.objects.get_or_create(user=demo, lesson=lesson)
+            if not lp.is_watched:
+                lp.is_watched = True
+                lp.watched_at = timezone.now()
+                lp.save()
+
+        # demo submissions: strong on «Законы Кеплера», weak on «Небесные координаты», 2 mistakes
+        ensure_submission(demo, p2, {'option_id': str(opt_b.id)})                    # correct (Kepler)
+        ensure_submission(demo, p3, {'value': 671})                                  # correct (Kepler)
+        ensure_submission(demo, bank_problems[5], {'latex': 'T^2 = \\frac{4\\pi^2 a^3}{G M}'})  # correct (Kepler)
+        ensure_submission(demo, bank_problems[0], {'value': 5})                      # correct (magnitudes)
+        ensure_submission(demo, bank_problems[3], {'value': 20})                     # wrong (эклиптика 23.4)
+        ensure_submission(demo, bank_problems[6], {'value': 50})                     # wrong (кульминация 45)
+
+        LessonRating.objects.get_or_create(
+            user=demo, lesson=lesson1_2_1, defaults={'rating': 5, 'comment': 'Отличный разбор, всё по полочкам!'},
+        )
+        Favorite.objects.get_or_create(user=demo, lesson=lesson2_1_1)
+        Favorite.objects.get_or_create(user=demo, problem=bank_problems[0])
+        Question.objects.get_or_create(
+            user=demo, lesson=lesson1_1_2,
+            defaults={'text': 'Можно ли применять третий закон Кеплера к двойным звёздам?'},
+        )
+
+        # demo completed mock attempt (so mock stats / best result are populated)
+        if not MockAttempt.objects.filter(user=demo, mock=mock).exists():
+            results = [(p2, True), (p3, True), (bank_problems[0], True),
+                       (bank_problems[2], False), (bank_problems[7], True)]
+            max_score = sum(pr.max_score for pr, _ in results)
+            score = sum(pr.max_score for pr, ok in results if ok)
+            attempt = MockAttempt.objects.create(
+                user=demo, mock=mock,
+                deadline=timezone.now() + timedelta(minutes=mock.duration_minutes),
+                finished_at=timezone.now(), is_completed=True,
+                score=score, max_score=max_score,
+            )
+            for pr, ok in results:
+                MockAnswer.objects.get_or_create(
+                    attempt=attempt, problem=pr,
+                    defaults={'is_correct': ok, 'score': pr.max_score if ok else 0},
+                )
+
+        # A past calendar event so the «прошедшие» view is not empty.
+        OlympiadEvent.objects.get_or_create(
+            title='Пробный школьный тур (прошёл)',
+            defaults={'event_type': et_school, 'start_date': today - timedelta(days=20),
+                      'description': 'Завершённый тренировочный школьный тур.'},
+        )
+
         self.stdout.write(self.style.SUCCESS('Database seeded successfully!'))
         self.stdout.write('')
         self.stdout.write('Test accounts:')
-        self.stdout.write('  Admin: admin@apeks.space / admin123')
-        self.stdout.write('  Student 1: student1@test.com / student123')
-        self.stdout.write('  Student 2: student2@test.com / student123')
+        self.stdout.write('  Admin (Django): admin@apeks.space / admin123')
+        self.stdout.write('  Admin (QA):     admin@apex.test / AdminApex2026!')
+        self.stdout.write('  Student (QA):   student@apex.test / StudentApex2026!  (rich demo data)')
+        self.stdout.write('  Student 1:      student1@test.com / student123')
+        self.stdout.write('  Student 2:      student2@test.com / student123')

@@ -58,6 +58,15 @@ class RecommendationItemSerializer(serializers.Serializer):
     tag = serializers.CharField(required=False)
 
 
+class StudyPlanStepSerializer(serializers.Serializer):
+    step = serializers.IntegerField()
+    focus = serializers.CharField()
+    detail = serializers.CharField()
+    action_url = serializers.CharField()
+
+
 class RecommendationsSerializer(serializers.Serializer):
-    generated_by = serializers.CharField()
+    generated_by = serializers.CharField()  # 'ai' | 'heuristic'
+    summary = serializers.CharField(allow_blank=True)  # personal insight
     items = RecommendationItemSerializer(many=True)
+    study_plan = StudyPlanStepSerializer(many=True)

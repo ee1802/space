@@ -23,18 +23,18 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    email = models.EmailField(unique=True)
-    full_name = models.CharField(max_length=255, blank=True, default='')
-    telegram_username = models.CharField(max_length=100, blank=True, default='')
-    is_admin = models.BooleanField(default=False)
-    is_email_verified = models.BooleanField(default=False)
-    email_verification_token = models.CharField(max_length=255, blank=True, default='')
-    password_reset_token = models.CharField(max_length=255, blank=True, default='')
-    password_reset_token_created = models.DateTimeField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    email = models.EmailField(unique=True, verbose_name='Email')
+    full_name = models.CharField(max_length=255, blank=True, default='', verbose_name='ФИО')
+    telegram_username = models.CharField(max_length=100, blank=True, default='', verbose_name='Telegram')
+    is_admin = models.BooleanField(default=False, verbose_name='Администратор')
+    is_email_verified = models.BooleanField(default=False, verbose_name='Email подтверждён')
+    email_verification_token = models.CharField(max_length=255, blank=True, default='', verbose_name='Токен подтверждения email')
+    password_reset_token = models.CharField(max_length=255, blank=True, default='', verbose_name='Токен сброса пароля')
+    password_reset_token_created = models.DateTimeField(null=True, blank=True, verbose_name='Токен сброса создан')
+    is_active = models.BooleanField(default=True, verbose_name='Активен')
+    is_staff = models.BooleanField(default=False, verbose_name='Доступ в админку')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создан')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Обновлён')
 
     objects = UserManager()
 
@@ -44,6 +44,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Meta:
         db_table = 'users'
         ordering = ['-created_at']
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
 
     def __str__(self):
         return self.full_name or self.email

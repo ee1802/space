@@ -256,9 +256,18 @@ export interface Recommendation {
   tag?: string;
 }
 
+export interface StudyPlanStep {
+  step: number;
+  focus: string;
+  detail: string;
+  action_url: string;
+}
+
 export interface RecommendationResponse {
   generated_by: string;
+  summary?: string;
   items: Recommendation[];
+  study_plan?: StudyPlanStep[];
 }
 
 export interface MockOlympiad {

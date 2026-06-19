@@ -322,6 +322,8 @@ function AiHighlight() {
       ? 'Сгенерировано ИИ по вашему прогрессу'
       : 'Подобрано по вашему прогрессу'
     : 'Персональный план подготовки';
+  const summary = data?.summary?.trim();
+  const plan = data?.study_plan ?? [];
 
   return (
     <section
@@ -358,6 +360,12 @@ function AiHighlight() {
             </span>
           )}
         </div>
+
+        {summary && (
+          <div className="mb-5 rounded-xl border border-[#8B6DD4]/25 bg-[#8B6DD4]/[0.06] p-4">
+            <p className="text-sm leading-relaxed text-[#D7D3CC]">{summary}</p>
+          </div>
+        )}
 
         {data === null && !error ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -406,6 +414,32 @@ function AiHighlight() {
             subtitle="Решайте задачи и смотрите уроки — ИИ подскажет, что изучить дальше и где ваши слабые места."
             className="!py-8"
           />
+        )}
+
+        {plan.length > 0 && (
+          <div className="mt-5">
+            <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-[#A8A5A0]">
+              План на неделю
+            </p>
+            <ol className="grid gap-2 sm:grid-cols-2">
+              {plan.map((s) => (
+                <li key={s.step}>
+                  <Link
+                    href={s.action_url || '#'}
+                    className="group flex items-center gap-3 rounded-lg border border-[#1E2D4A] bg-[#0B111F] px-3 py-2 transition-colors hover:border-[#8B6DD4]/50 hover:bg-[#152035] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B6DD4]"
+                  >
+                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#8B6DD4]/20 text-[11px] font-bold text-[#C9B6FF]">
+                      {s.step}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-medium text-[#F0EDE8]">{s.focus}</span>
+                      <span className="block truncate text-[11px] text-[#A8A5A0]">{s.detail}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </div>
         )}
       </div>
     </section>

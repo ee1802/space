@@ -416,42 +416,170 @@ def _heuristic_recommendations(user, stats):
     return items[:8]
 
 
-def _maybe_enrich_with_ai(stats, items):
-    """
-    Optional: if ANTHROPIC_API_KEY is present, ask claude-fable-5 to rephrase the
-    recommendation titles/reasons in a warmer, more personal Russian tone.
+# Short focus label per recommendation type, used to build the weekly plan.
+FOCUS_LABELS = {
+    'overdue_homework': 'Закрыть долги по ДЗ',
+    'weak_topic': 'Подтянуть слабую тему',
+    'redo_mistakes': 'Разобрать ошибки',
+    'watch_lesson': 'Пройти следующий урок',
+    'bank_level': 'Решать задачи своего уровня',
+    'upcoming_event': 'Прорешать пробник перед олимпиадой',
+    'strength': 'Усложнить сильную тему',
+    'get_started': 'Начать с вводных уроков',
+}
 
-    Uses stdlib urllib only, hard timeout, and falls back to the heuristic
-    output on ANY error. Returns (items, generated_by).
+
+def _active_days_and_streak(stats):
+    """From the 30-day recent_activity series: (active_days, current_streak)."""
+    series = stats.get('recent_activity') or []
+    active_days = sum(1 for d in series if d.get('count', 0) > 0)
+    streak = 0
+    for d in reversed(series):  # newest entry is last
+        if d.get('count', 0) > 0:
+            streak += 1
+        else:
+            break
+    return active_days, streak
+
+
+def _build_insight(stats):
+    """
+    Deterministic, personalised study insight (Russian, 1-4 sentences).
+    Always available; the AI layer may replace it with a warmer version.
+    """
+    attempted = stats['total_attempted']
+    watched = stats['lessons_watched']
+    if attempted == 0 and watched == 0:
+        return (
+            'Вы только начинаете путь в астрономии. Посмотрите вводные уроки и решите '
+            'первые задачи — здесь сразу появится персональный разбор вашего прогресса.'
+        )
+
+    parts = []
+    if attempted:
+        parts.append(
+            f'Решено задач: {stats["solved_problems"]} из {attempted}, '
+            f'точность {stats["accuracy"]}%.'
+        )
+    if stats['lessons_total']:
+        parts.append(f'Просмотрено уроков: {watched} из {stats["lessons_total"]}.')
+
+    strong = stats['strengths']
+    if strong:
+        names = ' и '.join(f'«{s}»' for s in strong[:2])
+        parts.append(f'Сильнее всего идёт {names}.')
+
+    weak = stats['weaknesses']
+    if weak:
+        names = ', '.join(f'«{w}»' for w in weak[:2])
+        parts.append(f'В первую очередь стоит подтянуть {names}.')
+    elif stats['accuracy'] and stats['accuracy'] < 60 and attempted >= 2:
+        parts.append('Поработайте над точностью — разбирайте ошибку сразу после решения.')
+
+    if stats['mock_attempts']:
+        parts.append(f'Лучший результат на пробнике: {stats["best_mock_percent"]}%.')
+
+    active_days, streak = _active_days_and_streak(stats)
+    if streak >= 3:
+        parts.append(f'Вы занимаетесь {streak} дн. подряд — отличный темп, не сбавляйте!')
+    elif active_days == 0:
+        parts.append('Давно не было активности — вернитесь к задачам, чтобы не терять форму.')
+
+    return ' '.join(parts)
+
+
+def _build_study_plan(items):
+    """Turn the top prioritised recommendations into a short ordered weekly plan."""
+    plan = []
+    for item in items:
+        if len(plan) >= 4:
+            break
+        focus = FOCUS_LABELS.get(item['type'])
+        if not focus:
+            continue
+        plan.append({
+            'step': len(plan) + 1,
+            'focus': focus,
+            'detail': item['title'],
+            'action_url': item['action_url'],
+        })
+    return plan
+
+
+def _ai_student_context(stats):
+    """Compact but rich JSON-able context describing the student for the model."""
+    active_days, streak = _active_days_and_streak(stats)
+    return {
+        'точность_%': stats['accuracy'],
+        'решено_задач': stats['solved_problems'],
+        'всего_попыток': stats['total_attempted'],
+        'уроков_просмотрено': stats['lessons_watched'],
+        'уроков_всего': stats['lessons_total'],
+        'по_темам': [
+            {'тема': b['tag'], 'точность_%': b['accuracy'], 'решено': f'{b["correct"]}/{b["attempted"]}'}
+            for b in stats['by_topic'][:6]
+        ],
+        'по_этапам': [
+            {'этап': b['label'], 'точность_%': b['accuracy'], 'решено': f'{b["correct"]}/{b["attempted"]}'}
+            for b in stats['by_level']
+        ],
+        'сильные_темы': stats['strengths'],
+        'слабые_темы': stats['weaknesses'],
+        'пробников_пройдено': stats['mock_attempts'],
+        'лучший_пробник_%': stats['best_mock_percent'],
+        'активных_дней_за_30': active_days,
+        'серия_дней_подряд': streak,
+    }
+
+
+def _clip(value, lo, hi):
+    """Trimmed string if its length is within [lo, hi], else None. Rejects
+    empty / junk / over-long AI text so it can never overwrite good copy."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s if lo <= len(s) <= hi else None
+
+
+def _maybe_enrich_with_ai(stats, items, summary, study_plan):
+    """
+    Deep AI layer: if ANTHROPIC_API_KEY is present, ask claude-fable-5 to
+    (1) write a personal insight summary, (2) reword each recommendation, and
+    (3) reword the weekly plan — all grounded in the full student stats.
+
+    The model NEVER controls links/types/priority/ordering (server-authoritative);
+    it only rewrites TEXT, validated by strict length checks. Falls back to the
+    deterministic summary + heuristic items + heuristic plan on ANY error.
+    Returns (items, summary, study_plan, generated_by).
     """
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
-        return items, 'heuristic'
+        return items, summary, study_plan, 'heuristic'
 
     try:
-        summary_lines = [
-            f"Точность: {stats['accuracy']}%, решено задач: {stats['solved_problems']} из {stats['total_attempted']}.",
-            f"Просмотрено уроков: {stats['lessons_watched']} из {stats['lessons_total']}.",
-            f"Слабые темы: {', '.join(stats['weaknesses']) or 'нет'}.",
-            f"Сильные темы: {', '.join(stats['strengths']) or 'нет'}.",
-        ]
-        recs_payload = [
-            {'type': i['type'], 'title': i['title'], 'reason': i['reason']}
-            for i in items
-        ]
+        context = _ai_student_context(stats)
+        recs_payload = [{'type': i['type'], 'title': i['title'], 'reason': i['reason']} for i in items]
+        plan_payload = [{'focus': p['focus'], 'detail': p['detail']} for p in study_plan]
         prompt = (
-            "Ты — дружелюбный наставник по подготовке к олимпиадам по астрономии. "
-            "Вот статистика ученика:\n" + "\n".join(summary_lines) +
-            "\n\nВот черновые рекомендации (JSON-массив с полями type, title, reason):\n" +
-            json.dumps(recs_payload, ensure_ascii=False) +
-            "\n\nПерефразируй title и reason каждой рекомендации тепло и мотивирующе, "
-            "на русском языке, не меняя смысл и не добавляя/убирая элементы. "
-            "Верни СТРОГО JSON-массив того же размера с полями title и reason, без пояснений."
+            'Ты — опытный и доброжелательный наставник по подготовке к олимпиадам по '
+            'астрономии (онлайн-школа «Апекс»). Данные ученика (JSON):\n'
+            + json.dumps(context, ensure_ascii=False)
+            + '\n\nЧерновые рекомендации (нельзя менять количество, порядок и смысл):\n'
+            + json.dumps(recs_payload, ensure_ascii=False)
+            + '\n\nЧерновой план на неделю:\n'
+            + json.dumps(plan_payload, ensure_ascii=False)
+            + '\n\nВерни СТРОГО один JSON-объект без пояснений и без markdown:\n'
+            '{"summary": "тёплый персональный разбор на русском в 2-3 предложениях: '
+            'прогресс, сильные стороны и над чем поработать в первую очередь", '
+            '"items": [{"title": "...", "reason": "..."}], '
+            '"plan": [{"focus": "коротко", "detail": "по делу"}]}\n'
+            'Массивы items и plan — той же длины и в том же порядке, что и черновики. '
+            'Пиши мотивирующе и конкретно, опираясь на цифры ученика.'
         )
 
         body = json.dumps({
             'model': 'claude-fable-5',
-            'max_tokens': 1024,
+            'max_tokens': 2048,
             'messages': [{'role': 'user', 'content': prompt}],
         }).encode('utf-8')
 
@@ -465,7 +593,7 @@ def _maybe_enrich_with_ai(stats, items):
             },
             method='POST',
         )
-        with urllib.request.urlopen(req, timeout=6) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode('utf-8'))
 
         text = ''.join(
@@ -479,15 +607,38 @@ def _maybe_enrich_with_ai(stats, items):
             if text.startswith('json'):
                 text = text[4:]
             text = text.strip()
-        rephrased = json.loads(text)
-        if isinstance(rephrased, list) and len(rephrased) == len(items):
-            for original, new in zip(items, rephrased):
+        parsed = json.loads(text)
+        if not isinstance(parsed, dict):
+            return items, summary, study_plan, 'heuristic'
+
+        # Server-authoritative: only TEXT is taken from the model, and only when
+        # it passes length bounds. Links/types/priority/ordering never change.
+        s = _clip(parsed.get('summary'), 20, 600)
+        ai_summary = s if s else summary
+
+        new_items = parsed.get('items')
+        if isinstance(new_items, list) and len(new_items) == len(items):
+            for original, new in zip(items, new_items):
                 if isinstance(new, dict):
-                    if new.get('title'):
-                        original['title'] = str(new['title'])
-                    if new.get('reason'):
-                        original['reason'] = str(new['reason'])
-            return items, 'ai'
+                    title = _clip(new.get('title'), 3, 120)
+                    reason = _clip(new.get('reason'), 10, 400)
+                    if title:
+                        original['title'] = title
+                    if reason:
+                        original['reason'] = reason
+
+        new_plan = parsed.get('plan')
+        if isinstance(new_plan, list) and len(new_plan) == len(study_plan):
+            for original, new in zip(study_plan, new_plan):
+                if isinstance(new, dict):
+                    focus = _clip(new.get('focus'), 3, 60)
+                    detail = _clip(new.get('detail'), 3, 200)
+                    if focus:
+                        original['focus'] = focus
+                    if detail:
+                        original['detail'] = detail
+
+        return items, ai_summary, study_plan, 'ai'
     except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError,
             TypeError, OSError, json.JSONDecodeError):
         pass
@@ -495,17 +646,28 @@ def _maybe_enrich_with_ai(stats, items):
         # Never let AI enrichment break the endpoint.
         pass
 
-    return items, 'heuristic'
+    return items, summary, study_plan, 'heuristic'
 
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def me_recommendations(request):
-    """GET /api/me/recommendations — heuristic (optionally AI-enriched) study tips."""
+    """GET /api/me/recommendations — personalised study insight, recommendations
+    and a weekly plan. Deterministic by default; deeply AI-enriched (insight,
+    wording and plan) when ANTHROPIC_API_KEY is configured."""
     stats = _build_stats(request.user)
     items = _heuristic_recommendations(request.user, stats)
-    items, generated_by = _maybe_enrich_with_ai(stats, items)
-    return Response({'generated_by': generated_by, 'items': items})
+    summary = _build_insight(stats)
+    study_plan = _build_study_plan(items)
+    items, summary, study_plan, generated_by = _maybe_enrich_with_ai(
+        stats, items, summary, study_plan,
+    )
+    return Response({
+        'generated_by': generated_by,
+        'summary': summary,
+        'items': items,
+        'study_plan': study_plan,
+    })
 
 
 # ---------------------------------------------------------------------------
